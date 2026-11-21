@@ -1,0 +1,13 @@
+{
+  "name": "dashboard-tidb",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "seed": "node scripts/seed-admin.mjs",
+    "dev": "wrangler pages dev ."
+  },
+  "dependencies": {
+    "@tidbcloud/serverless": "^0.3.0"
+  }
+}

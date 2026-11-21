@@ -1,0 +1,131 @@
+// Kelola pengguna — khusus Admin Pusat.
+//   GET  /api/admin/users                                   daftar pengguna + daftar BAM yang ada
+//   POST /api/admin/users {action:'create', nik, nama, jabatan, bam_scope?, password?}
+//   POST /api/admin/users {action:'update', nik, nama?, jabatan?, bam_scope?, aktif?}
+//   POST /api/admin/users {action:'reset',  nik}            password sementara (tampil satu kali)
+import { getDb } from '../../_lib/db.js';
+import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
+import { requireUser, audit, JABATAN, LABEL, normNik, normScope, parseScope } from '../../_lib/auth.js';
+import { hashPassword, tempPassword, checkPasswordPolicy, iterFrom } from '../../_lib/security.js';
+
+const row = (r) => ({
+  nik: r.nik, nama: r.nama, jabatan: r.jabatan, label: LABEL[r.jabatan] || r.jabatan,
+  bam_scope: r.jabatan === 'ADMIN_PUSAT' ? null : parseScope(r.bam_scope),
+  aktif: Number(r.aktif) === 1, must_change: Number(r.must_change) === 1,
+  last_login: r.last_login || null, pw_changed_at: r.pw_changed_at || null, created_at: r.created_at || null,
+});
+
+async function bamList(db) {
+  const r = await db.query("SELECT DISTINCT UPPER(TRIM(bam)) AS bam FROM toko WHERE bam IS NOT NULL AND TRIM(bam) <> '' ORDER BY 1");
+  return r.map((x) => x.bam);
+}
+
+// Nama BAM yang diketik tapi tidak ada di data toko (kemungkinan salah ketik) — peringatan, bukan error.
+async function unknownBam(db, scope) {
+  if (!scope.length) return [];
+  const known = new Set(await bamList(db));
+  return scope.filter((b) => !known.has(b));
+}
+
+function scopeFor(jabatan, input) {
+  if (jabatan === 'ADMIN_PUSAT') return null;
+  const s = normScope(input);
+  if (!s.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');
+  return s;
+}
+
+export async function handleGet({ request }, db) {
+  await requireUser(db, request, { need: 'pusat' });
+  const users = await db.query(
+    'SELECT nik, nama, jabatan, bam_scope, aktif, must_change, last_login, pw_changed_at, created_at FROM users ORDER BY jabatan, nama');
+  return json({
+    users: users.map(row),
+    bamList: await bamList(db),
+    jabatan: JABATAN.map((k) => ({ key: k, label: LABEL[k] })),
+  });
+}
+
+export async function handlePost({ request, env }, db) {
+  checkOrigin(request);
+  const me = await requireUser(db, request, { need: 'pusat' });
+  const b = await readJson(request, 100_000);
+  const nik = normNik(b.nik);
+  if (!nik) throw new HttpError(400, 'NIK tidak valid (3–30 karakter huruf/angka).');
+
+  if (b.action === 'create') {
+    const nama = String(b.nama || '').trim();
+    if (!nama || nama.length > 150) throw new HttpError(400, 'Nama wajib diisi (maksimal 150 karakter).');
+    if (!JABATAN.includes(b.jabatan)) throw new HttpError(400, 'Jabatan tidak dikenal.');
+    const scope = scopeFor(b.jabatan, b.bam_scope);
+    if ((await db.query('SELECT 1 FROM users WHERE nik = ? LIMIT 1', [nik])).length)
+      throw new HttpError(409, 'NIK itu sudah terdaftar.', 'DUP');
+
+    let pw = typeof b.password === 'string' && b.password ? b.password : '';
+    let generated = false;
+    if (pw) {
+      const why = checkPasswordPolicy(pw, nik);
+      if (why) throw new HttpError(400, why, 'WEAK');
+    } else { pw = tempPassword(); generated = true; }
+
+    const h = await hashPassword(pw, undefined, iterFrom(env));
+    await db.exec(
+      'INSERT INTO users (nik, nama, jabatan, bam_scope, aktif, pw_hash, pw_salt, pw_iter, must_change) VALUES (?, ?, ?, ?, 1, ?, ?, ?, 1)',
+      [nik, nama, b.jabatan, scope ? JSON.stringify(scope) : null, h.pw_hash, h.pw_salt, h.pw_iter]);
+    await audit(db, { nik: me.nik, aksi: 'buat_user', target: nik, detail: b.jabatan });
+    return json({ ok: true, nik, tempPassword: generated ? pw : undefined, unknownBam: scope ? await unknownBam(db, scope) : [] });
+  }
+
+  const found = await db.query('SELECT nik, jabatan, aktif FROM users WHERE nik = ? LIMIT 1', [nik]);
+  if (!found.length) throw new HttpError(404, 'Pengguna tidak ditemukan.');
+  const target = found[0];
+
+  if (b.action === 'update') {
+    const sets = [], args = [];
+    let newScope = null;
+    if (b.nama !== undefined) {
+      const nama = String(b.nama).trim();
+      if (!nama || nama.length > 150) throw new HttpError(400, 'Nama tidak valid.');
+      sets.push('nama = ?'); args.push(nama);
+    }
+    const jab = b.jabatan !== undefined ? b.jabatan : target.jabatan;
+    if (b.jabatan !== undefined) {
+      if (!JABATAN.includes(b.jabatan)) throw new HttpError(400, 'Jabatan tidak dikenal.');
+      sets.push('jabatan = ?'); args.push(b.jabatan);
+    }
+    if (b.jabatan !== undefined || b.bam_scope !== undefined) {
+      const src = b.bam_scope !== undefined ? b.bam_scope : parseScope((await db.query('SELECT bam_scope FROM users WHERE nik = ?', [nik]))[0].bam_scope);
+      newScope = scopeFor(jab, src);
+      sets.push('bam_scope = ?'); args.push(newScope ? JSON.stringify(newScope) : null);
+    }
+    if (b.aktif !== undefined) { sets.push('aktif = ?'); args.push(b.aktif ? 1 : 0); }
+    if (!sets.length) return json({ ok: true, changed: 0 });
+
+    if (nik === me.nik && ((b.aktif !== undefined && !b.aktif) || jab !== 'ADMIN_PUSAT'))
+      throw new HttpError(400, 'Anda tidak bisa menonaktifkan atau menurunkan jabatan akun sendiri.', 'SELF');
+
+    await db.exec(`UPDATE users SET ${sets.join(', ')} WHERE nik = ?`, [...args, nik]);
+    await db.exec('DELETE FROM sessions WHERE nik = ?', [nik]);    // perubahan area/jabatan langsung berlaku
+    await audit(db, { nik: me.nik, aksi: 'ubah_user', target: nik, detail: Object.keys(b).filter((k) => k !== 'action' && k !== 'nik').join(',') });
+    return json({ ok: true, unknownBam: newScope ? await unknownBam(db, newScope) : [] });
+  }
+
+  if (b.action === 'reset') {
+    const pw = tempPassword();
+    const h = await hashPassword(pw, undefined, iterFrom(env));
+    await db.exec(
+      'UPDATE users SET pw_hash = ?, pw_salt = ?, pw_iter = ?, must_change = 1, failed_count = 0, locked_until = NULL WHERE nik = ?',
+      [h.pw_hash, h.pw_salt, h.pw_iter, nik]);
+    await db.exec('DELETE FROM sessions WHERE nik = ?', [nik]);
+    await audit(db, { nik: me.nik, aksi: 'reset_pw', target: nik });
+    return json({ ok: true, nik, tempPassword: pw });
+  }
+
+  throw new HttpError(400, 'Aksi tidak dikenal.');
+}
+
+export async function onRequestGet(ctx) {
+  try { return await handleGet(ctx, await getDb(ctx.env)); } catch (e) { return errorResponse(e); }
+}
+export async function onRequestPost(ctx) {
+  try { return await handlePost(ctx, await getDb(ctx.env)); } catch (e) { return errorResponse(e); }
+}
