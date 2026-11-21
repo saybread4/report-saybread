@@ -870,6 +870,8 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
   <div style="overflow:auto;padding:0 12px 12px"><table><thead><tr><th>Nama</th><th>BAM</th><th>Password</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="amB"><tr><td colspan="5">Memuat…</td></tr></tbody></table></div>
  </div></div>
 <script>
+/* Pembantu selector: harus ada sebelum blok login di bawah, yang memakainya saat halaman dimuat. */
+const $=s=>document.querySelector(s);
 /* ================= SHIM API (pengganti google.script.run) =================
    Semua data diambil lewat /api/rpc/<nama> (Cloudflare Pages Functions + TiDB Cloud).
    Sesi memakai cookie HttpOnly dari login NIK; hak akses dibatasi di server. */
@@ -1019,7 +1021,6 @@ let WAIT=0;   // 1 = pengguna klik Terapkan sebelum baris Stock tiba; tampil sen
 const MC=new Map(),TC=new Map(),LT=new Map();   // cache data Monitor per toko, data harian per toko, dan data TREND PER TOKO per toko (di browser)
 const onMon=()=>TAB==='Monitor'||TAB==='Cabang';   // halaman yang memakai sub Per Tanggal / Per Item
 const CO=new Intl.Collator('id',{numeric:true}).compare;
-const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const norm=s=>String(s).toUpperCase().replace(/[^A-Z0-9]/g,'');
 const NFC={};   // Intl.NumberFormat dibuat sekali per jumlah desimal (toLocaleString per sel sangat lambat)
