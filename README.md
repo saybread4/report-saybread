@@ -1,7 +1,7 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
-Status: **tahap 1b — login NIK di tampilan, kelola pengguna, refresh, dan 23 fungsi baca**. Login dan koneksi TiDB sudah diuji di Cloudflare asli; fungsi data BELUM diuji dengan data asli (TiDB masih kosong).
-Tes otomatis (41 tes, database tiruan): `node --test "test/*.test.mjs"`.
+Status: **tahap 1c — semua fungsi data sudah ada (baca, refresh, admin data, Gempar, override)**. Login dan koneksi TiDB sudah diuji di Cloudflare asli; fungsi data BELUM diuji dengan data asli (TiDB masih kosong).
+Tes otomatis (62 tes, database tiruan; SQL-nya belum pernah dijalankan di TiDB): `node --test "test/*.test.mjs"`.
 
 ## Hak akses
 
@@ -32,7 +32,7 @@ Tes otomatis (41 tes, database tiruan): `node --test "test/*.test.mjs"`.
         -d '{"nik":"<NIK>","password":"<password sementara>"}'
    ```
 
-## Yang sudah ada
+## Yang sudah ada (tahap 1b)
 - Tampilan (`index.html`): login NIK, ganti password wajib, tombol **Admin** = Kelola Pengguna (Admin Pusat), tombol Keluar.
 - `POST /api/auth/login`, `logout`, `change-password`, `GET /api/auth/me`
 - `GET/POST /api/admin/users` — buat, ubah (jabatan/area/aktif), reset password (khusus Admin Pusat)
@@ -42,11 +42,33 @@ Tes otomatis (41 tes, database tiruan): `node --test "test/*.test.mjs"`.
 - Password: PBKDF2-SHA256 + salt per pengguna; kunci 15 menit setelah 5x salah; sesi 12 jam (cookie HttpOnly);
   password sementara wajib diganti saat login pertama; semua aksi tercatat di `audit_log`.
 
+## Admin data (tahap 1c)
+`adminlist admincount admininfo adminupdate admindelete admindeleterow adminimport`, `savebudovr saverankovr`,
+`getgemparlist savegempar deletegempar gemparlist gemparsave gempardelete` — posisi argumen sama dengan versi Supabase.
+
+| Fungsi | Siapa |
+|---|---|
+| admin data + `savebudovr` | Admin Pusat (semua tabel) dan Admin Koorbam (hanya BAM di areanya; tabel `item` khusus Pusat) |
+| Gempar, `saverankovr` | Admin Pusat |
+
+Perbedaan dari versi Postgres yang perlu diketahui:
+- **Tanpa transaksi.** Bila impor berhenti di tengah, jalankan ulang dengan mode "Tambah / perbarui" (upsert aman diulang).
+  Pada tabel tanpa kunci unik (`stock_toko`, `budged`, `trend`) mode "Ganti" yang terputus lalu diulang bisa menimbulkan baris ganda —
+  untuk tabel itu, ulangi dengan "Tambah / perbarui", yang menghapus kunci lama lebih dulu.
+- `fixKode()` (pengganti trigger `trg_fix_kode`) dipakai pada semua tabel yang punya kolom `kode`: "7-Feb" -> "FEB7".
+- Jumlah baru/diubah dihitung lewat query hitung sebelum insert (bukan "rows affected").
+- Baris kembar dalam satu kiriman: yang terakhir menang.
+- Edit budged (`savebudovr`) kini butuh login admin; sebelumnya siapa pun bisa.
+
+## Urutan upload data baru
+1. `toko` -> 2. `item` -> 3. `modis` -> 4. `budged` -> 5. `sales_toko` -> 6. `stock_toko` -> 7. `stock` -> 8. `sales_item` -> 9. `trend`
+(`pnl_cabang`, `sales_kode_ref` belum punya jalur upload di tampilan; isi lewat SQL/Import TiDB Cloud bila perlu.)
+Setelah selesai, tekan **Refresh** (7 langkah) supaya tabel `mv_*` terisi. Admin Koorbam hanya bisa mengunggah data
+tabel lain setelah `toko` untuk BAM-nya ada.
+
 ## Belum ada
-- Impor data lama dari Supabase ke TiDB (tabel masih kosong), lalu jalankan Refresh (tombol Refresh di tampilan).
-- Fungsi admin data: `adminlist admincount admininfo adminupdate admindelete admindeleterow adminimport`,
-  `savegempar deletegempar getgemparlist gemparsave gemparlist gempardelete`, `savebudovr saverankovr`
-- Telegram (Worker dengan Cron Trigger)
+- Telegram (Worker dengan Cron Trigger + token bot sebagai Secret)
+- Pemindahan `pnl_cabang`, `sales_kode_ref`, `rank_override`, `budged_override` bila ingin membawa data lama
 
 ## Catatan
 - PBKDF2 butuh waktu CPU. Jika Cloudflare menolak karena batas CPU paket gratis, turunkan `PBKDF2_ITER`

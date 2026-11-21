@@ -1,11 +1,11 @@
 // Daftar fungsi data. Setiap fungsi: { need: 'view'|'edit'|'pusat', run({db,user,env}, a) }
 // Semua fungsi baca WAJIB memakai bamWhere()/kodeWhere() supaya data dibatasi sesuai area pengguna.
 //
-// Tahap ini baru berisi empat fungsi contoh (pola yang sama dipakai untuk sisanya).
 import { bamWhere } from '../scope.js';
 import { norm, nz, num } from '../util.js';
 import { readHandlers } from './read.js';
 import { refreshHandlers } from './refresh.js';
+import { adminHandlers } from './admin.js';
 
 const byText = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
 
@@ -76,4 +76,4 @@ const baseHandlers = {
   },
 };
 
-export const handlers = { ...baseHandlers, ...readHandlers, ...refreshHandlers };
+export const handlers = { ...baseHandlers, ...readHandlers, ...refreshHandlers, ...adminHandlers };
