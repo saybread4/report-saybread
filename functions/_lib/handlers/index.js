@@ -4,10 +4,12 @@
 // Tahap ini baru berisi empat fungsi contoh (pola yang sama dipakai untuk sisanya).
 import { bamWhere } from '../scope.js';
 import { norm, nz, num } from '../util.js';
+import { readHandlers } from './read.js';
+import { refreshHandlers } from './refresh.js';
 
 const byText = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
 
-export const handlers = {
+const baseHandlers = {
   // Peta organisasi per toko: kode -> [bas, bastr, am, as, wilayah, domain, kriteria]
   getorg: {
     need: 'view',
@@ -73,3 +75,5 @@ export const handlers = {
     },
   },
 };
+
+export const handlers = { ...baseHandlers, ...readHandlers, ...refreshHandlers };

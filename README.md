@@ -1,7 +1,7 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
-Status: **tahap 1a — fondasi login dan hak akses**. Belum diuji di TiDB / Cloudflare asli.
-Tes otomatis (32 tes, database tiruan): `node --test "test/*.test.mjs"`.
+Status: **tahap 1b — login NIK di tampilan, kelola pengguna, refresh, dan 23 fungsi baca**. Login dan koneksi TiDB sudah diuji di Cloudflare asli; fungsi data BELUM diuji dengan data asli (TiDB masih kosong).
+Tes otomatis (41 tes, database tiruan): `node --test "test/*.test.mjs"`.
 
 ## Hak akses
 
@@ -33,15 +33,19 @@ Tes otomatis (32 tes, database tiruan): `node --test "test/*.test.mjs"`.
    ```
 
 ## Yang sudah ada
+- Tampilan (`index.html`): login NIK, ganti password wajib, tombol **Admin** = Kelola Pengguna (Admin Pusat), tombol Keluar.
 - `POST /api/auth/login`, `logout`, `change-password`, `GET /api/auth/me`
 - `GET/POST /api/admin/users` — buat, ubah (jabatan/area/aktif), reset password (khusus Admin Pusat)
-- `POST /api/rpc/<nama>` — pengganti RPC Supabase; baru `getorg`, `getbam`, `getpnlcabang`, `getplu`
+- `POST /api/rpc/<nama>` — pengganti RPC Supabase. Sudah ada: `getorg getbam getpnlcabang getplu getcabmeta getmeta getrows
+  getstockfd getexcelfd gettanggal gettanggalcab gettglmentah getbasdata getbasdataitem getrankcab getmonitor getmonitorcab
+  gettrend gethistori gethistory getbudged getbudovr getgempar` dan `adminrefresh` (isi ulang tabel `mv_*`, 7 langkah).
 - Password: PBKDF2-SHA256 + salt per pengguna; kunci 15 menit setelah 5x salah; sesi 12 jam (cookie HttpOnly);
   password sementara wajib diganti saat login pertama; semua aksi tercatat di `audit_log`.
 
 ## Belum ada
-- ~45 fungsi data lain (rank, monitor, trend, budged, stock, impor admin, ...), refresh tabel `mv_*`
-- Halaman login NIK, ganti password, dan kelola pengguna di `index.html`
+- Impor data lama dari Supabase ke TiDB (tabel masih kosong), lalu jalankan Refresh (tombol Refresh di tampilan).
+- Fungsi admin data: `adminlist admincount admininfo adminupdate admindelete admindeleterow adminimport`,
+  `savegempar deletegempar getgemparlist gemparsave gemparlist gempardelete`, `savebudovr saverankovr`
 - Telegram (Worker dengan Cron Trigger)
 
 ## Catatan
