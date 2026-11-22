@@ -1,7 +1,27 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
-Status: **tahap 1c — semua fungsi data sudah ada (baca, refresh, admin data, Gempar, override)**. Login dan koneksi TiDB sudah diuji di Cloudflare asli; fungsi data BELUM diuji dengan data asli (TiDB masih kosong).
-Tes otomatis (62 tes, database tiruan; SQL-nya belum pernah dijalankan di TiDB): `node --test "test/*.test.mjs"`.
+Status: **tahap 1d — login langsung ke halaman utama, menu pengguna, daftar akun, dan reset password**. Semua fungsi data dari tahap 1c tetap ada.
+Tes otomatis (75 tes, database tiruan; SQL-nya belum pernah dijalankan di TiDB asli): `node --test "test/*.test.mjs"`.
+
+## Daftar akun & reset password (tahap 1d)
+
+**Jalankan `migrasi-1d.sql` di TiDB SEBELUM deploy** (membuat tabel `registrations` dan `reset_requests`).
+Bila lupa, login tetap berjalan, tetapi Daftar/Lupa password akan gagal dan lencana Admin tidak muncul.
+
+Alur:
+1. Calon pengguna menekan **Daftar akun** di halaman masuk, mengisi NIK, nama, jabatan, area BAM, (opsional) WhatsApp, dan password pilihannya.
+   Jabatan Admin tidak bisa dipilih sendiri. Isian jabatan dan area hanya *permintaan*.
+2. Admin Pusat membuka **Admin → Pendaftaran** (lencana merah menunjukkan jumlahnya), memeriksa, memperbaiki jabatan dan area bila perlu
+   (area ditebak otomatis dari teks yang ditulis pendaftar), lalu **Setujui** atau **Tolak** (dengan alasan).
+3. Sebelum disetujui, pendaftar yang mencoba masuk melihat "menunggu verifikasi" (hanya bila passwordnya cocok). Setelah disetujui, ia masuk dengan password pilihannya sendiri.
+4. **Lupa password**: pengguna mengirim NIK (+ WhatsApp). Tidak ada password yang berubah. Admin Pusat membuka **Admin → Reset password**,
+   menekan **Buat password sementara**, lalu menyampaikannya langsung. Pengguna wajib menggantinya saat masuk.
+
+Keamanan: jawaban "lupa password" selalu sama untuk NIK terdaftar maupun tidak; antrean pendaftaran dibatasi 300; password pendaftar disimpan sebagai hash.
+Disarankan menambah aturan *Rate Limiting* Cloudflare untuk `/api/auth/register` dan `/api/auth/reset-request`.
+
+Tampilan: setelah masuk, pengguna langsung ke halaman utama (data sudah dibatasi di server sesuai area). Nama, **Ganti password**, dan **Keluar**
+ada di menu pengguna (pojok kanan atas header). Chip cakupan di header tetap bisa dipakai untuk mempersempit ke BAM/cabang tertentu.
 
 ## Hak akses
 

@@ -507,6 +507,77 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
 #usW .b{padding:3px 9px;font-size:12px;min-width:0;line-height:1.3;border-radius:7px;margin:0 2px 0 0}
 #usW .on{color:#0f766e;font-weight:800}#usW .off{color:#b4361f;font-weight:800}
 #usW .amn{font-size:11.5px;color:#64748b;padding:8px 12px;line-height:1.5}
+/* ===== Layar login: ikon mata, tautan Daftar / Lupa password, layar selesai ===== */
+.gf.pw input{padding-right:46px}
+.geye svg{width:18px;height:18px}
+.glinks{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--bd);font-size:12px;color:var(--mu)}
+.glinks a{color:var(--pr);font-weight:700;text-decoration:none}
+.glinks a:hover{text-decoration:underline}
+.gopt{font-weight:500;color:var(--mu)}
+.ghint{margin:-6px 0 10px;font-size:11px;color:var(--mu);line-height:1.45}
+#doneBox{text-align:center;padding:6px 0 0}
+#doneBox .dic{width:54px;height:54px;border-radius:50%;background:#e7f5f2;color:var(--pr);display:grid;place-items:center;margin:6px auto 12px;font-size:26px;font-weight:800}
+#doneBox h3{margin:0 0 6px;font-size:16px;color:var(--deep)}
+#doneBox p{margin:0 0 18px;font-size:12.5px;color:var(--mu);line-height:1.55}
+/* ===== Menu pengguna di header ===== */
+.umenu{flex:none}
+#uBtn{display:inline-flex;align-items:center;gap:7px;max-width:220px;padding:3px 10px 3px 3px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font:inherit;line-height:1.15;cursor:pointer}
+#uBtn:hover,#uBtn[aria-expanded=true]{background:rgba(255,255,255,.16)}
+.uav{flex:none;width:26px;height:26px;border-radius:50%;background:#f5c97a;color:#4b2a1c;font-weight:800;font-size:12px;display:grid;place-items:center}
+.utx{display:flex;flex-direction:column;min-width:0;text-align:left}
+.utx b{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.utx small{font-size:9.5px;color:#f3dcae;font-weight:600;white-space:nowrap}
+#uBtn .ch{flex:none;width:10px;height:10px;opacity:.8}
+#uPop{position:fixed;z-index:120;min-width:240px;max-width:calc(100vw - 16px);background:#fff;color:var(--tx);border:1px solid var(--bd);border-radius:14px;box-shadow:0 14px 36px rgba(0,0,0,.35);padding:6px;font-size:13px}
+#uPop .uhd{display:flex;flex-direction:column;gap:1px;padding:8px 10px 10px;border-bottom:1px solid var(--bd);margin-bottom:4px}
+#uPop .uhd b{font-size:13.5px;color:var(--deep)}
+#uPop .uhd span{font-size:11.5px;color:var(--mu);line-height:1.4}
+#uPop button{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;border:0;border-radius:9px;background:transparent;color:var(--tx);font:inherit;font-weight:600;text-align:left;cursor:pointer}
+#uPop button:hover{background:var(--soft)}
+#uPop button.out{color:#b4361f}
+#uPop .ic{width:16px;height:16px}
+.bdg{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;margin-left:2px;border-radius:99px;background:#e53935;color:#fff;font-size:10px;font-weight:800;line-height:1}
+/* tata letak desktop: baris 1 = logo, menu halaman, nama pengguna (kanan); baris 2 = chip cakupan & tombol.
+   Dua baris dipakai karena tombol administrator (Gempar, Admin, Data, Refresh) membuat satu baris terlalu sesak. */
+@media(min-width:900px){
+  header .wrap{flex-wrap:wrap;gap:6px 10px}
+  header .brand{flex:none}
+  header nav{order:1;flex:0 1 auto}
+  .umenu{order:2;margin-left:auto}
+  .mbox{order:3;flex:1 1 100%;margin-left:0;padding-left:0;border-left:0;padding-top:2px;border-top:1px solid rgba(255,255,255,.12);padding-top:6px}
+}
+/* tata letak: HP/tablet — nama pengguna di sebelah kanan logo, menu halaman & tombol di baris bawah */
+@media(max-width:899px){
+  header .brand{flex:1 1 auto;min-width:0}
+  .umenu{order:1;margin-left:auto}
+  header nav{order:2}
+  .mbox{order:3}
+}
+@media(max-width:600px){
+  .utx small{display:none}
+  .utx b{max-width:68px}
+  #uBtn{gap:6px}
+  #uBtn{padding-right:8px}
+}
+/* ===== Kelola Pengguna: tab & daftar permintaan ===== */
+.ustabs{display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid #e3e6ea}
+.ustabs button{border:0;background:transparent;font:inherit;font-size:12px;font-weight:700;color:#64748b;padding:7px 12px;border-radius:9px 9px 0 0;cursor:pointer;border-bottom:2px solid transparent}
+.ustabs button:hover{color:#0f766e}
+.ustabs button.on{color:#0f766e;border-bottom-color:#0f766e;background:#f0f7f6}
+.ustabs button span{color:#e53935}
+@media(max-width:600px){.ustabs{gap:0;padding:8px 8px 0}.ustabs button{padding:7px 8px;white-space:nowrap;font-size:11.5px}}
+.rqlist{overflow:auto;padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.rqc{border:1px solid #e3e6ea;border-radius:12px;padding:10px 12px;background:#fbfcfc}
+.rqh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.rqh b{font-size:13px}.rqh span{font-size:11.5px;color:#64748b}.rqh .rqd{margin-left:auto}
+.rqm{font-size:12px;color:#334155;margin:4px 0 8px;line-height:1.5}
+.rqa{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.rqa label{display:flex;flex-direction:column;gap:2px;font-size:11px;color:#64748b;font-weight:600}
+.rqa .rqb{min-width:220px;flex:1}
+.rqx{display:flex;gap:6px;margin-left:auto}
+.rqe{padding:18px 8px;text-align:center;color:#64748b;font-size:12.5px}
+#usW .rqx .b{padding:6px 14px;font-size:12px}
+
 #amW table{width:100%;border-collapse:collapse;font-size:12px}
 #amW th{background:#0f766e;color:#fff;padding:5px 8px;text-align:left;position:sticky;top:0}
 #amW td{padding:5px 8px;border-bottom:1px solid #e3e6ea;white-space:nowrap}
@@ -566,25 +637,56 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
         <div id="nikForm">
           <div class="gs">Masuk dengan NIK dan password Anda</div>
           <div class="gf"><label for="nikNik">NIK</label><input id="nikNik" inputmode="text" autocomplete="username" autocapitalize="characters" spellcheck="false"></div>
-          <div class="gf"><label for="nikPw">Password</label><input id="nikPw" type="password" autocomplete="current-password"></div>
-          <div id="nikMsg" class="gnote" style="color:#b4361f;min-height:18px"></div>
+          <div class="gf pw"><label for="nikPw">Password</label><input id="nikPw" type="password" autocomplete="current-password"><button type="button" class="geye" data-for="nikPw" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
+          <div id="nikMsg" class="gnote" style="color:#b4361f;min-height:16px;margin:2px 0 8px"></div>
           <button class="gmasuk" id="nikGo" type="button">Masuk</button>
+          <div class="glinks"><a href="#" id="goReg">Daftar akun</a><span aria-hidden="true">·</span><a href="#" id="goRst">Lupa password?</a></div>
         </div>
         <div id="pwForm" style="display:none">
-          <div class="gs">Ganti password dulu sebelum melanjutkan</div>
-          <div class="gf"><label for="pwOld">Password lama (sementara)</label><input id="pwOld" type="password" autocomplete="current-password"></div>
-          <div class="gf"><label for="pwNew">Password baru</label><input id="pwNew" type="password" autocomplete="new-password"></div>
-          <div class="gf"><label for="pwNew2">Ulangi password baru</label><input id="pwNew2" type="password" autocomplete="new-password"></div>
-          <div id="pwMsg" class="gnote" style="color:#b4361f;min-height:18px"></div>
+          <div class="gs" id="pwSub">Ganti password dulu sebelum melanjutkan</div>
+          <div class="gf pw"><label for="pwOld" id="pwOldL">Password lama (sementara)</label><input id="pwOld" type="password" autocomplete="current-password"><button type="button" class="geye" data-for="pwOld" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
+          <div class="gf pw"><label for="pwNew">Password baru</label><input id="pwNew" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="pwNew" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
+          <div class="gf pw"><label for="pwNew2">Ulangi password baru</label><input id="pwNew2" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="pwNew2" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
+          <div class="ghint">Minimal 8 karakter, mengandung huruf dan angka.</div>
+          <div id="pwMsg" class="gnote" style="color:#b4361f;min-height:16px;margin:2px 0 8px"></div>
           <button class="gmasuk" id="pwGo" type="button">Simpan password</button>
+          <button type="button" class="gadm" id="pwCancel" style="display:none;margin:10px auto 0"><span>Batal</span></button>
           <button type="button" class="gadm" id="pwOut" style="display:block;margin:10px auto 0"><span>Keluar</span></button>
+        </div>
+        <div id="regForm" style="display:none">
+          <div class="gs">Daftar akun baru. Admin akan memverifikasi jabatan dan area Anda sebelum akun aktif.</div>
+          <div class="gf"><label for="rgNik">NIK</label><input id="rgNik" autocomplete="username" autocapitalize="characters" spellcheck="false"></div>
+          <div class="gf"><label for="rgNama">Nama lengkap</label><input id="rgNama" autocomplete="name"></div>
+          <div class="gf"><label for="rgJab">Jabatan</label><select id="rgJab"><option value="">Pilih jabatan…</option><option value="KOORBAM">Koorbam</option><option value="BAM">BAM</option><option value="BAS">BAS</option><option value="BASTR">BASTR</option></select></div>
+          <div class="gf"><label for="rgArea">Area BAM</label><input id="rgArea" placeholder="Mis. BAM Surabaya" autocomplete="off"></div>
+          <div class="gf"><label for="rgKontak">No. WhatsApp <span class="gopt">(opsional)</span></label><input id="rgKontak" inputmode="tel" autocomplete="tel" placeholder="Agar admin bisa menghubungi Anda"></div>
+          <div class="gf pw"><label for="rgPw">Password</label><input id="rgPw" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="rgPw" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
+          <div class="gf pw"><label for="rgPw2">Ulangi password</label><input id="rgPw2" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="rgPw2" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
+          <div class="ghint">Minimal 8 karakter, mengandung huruf dan angka.</div>
+          <div id="rgMsg" class="gnote" style="color:#b4361f;min-height:16px;margin:2px 0 8px"></div>
+          <button class="gmasuk" id="rgGo" type="button">Kirim pendaftaran</button>
+          <div class="glinks"><a href="#" id="rgBack">← Kembali ke halaman masuk</a></div>
+        </div>
+        <div id="rstForm" style="display:none">
+          <div class="gs">Lupa password? Kirim permintaan reset ke admin.</div>
+          <div class="gf"><label for="rsNik">NIK</label><input id="rsNik" autocomplete="username" autocapitalize="characters" spellcheck="false"></div>
+          <div class="gf"><label for="rsKontak">No. WhatsApp <span class="gopt">(opsional)</span></label><input id="rsKontak" inputmode="tel" autocomplete="tel" placeholder="Agar admin bisa menghubungi Anda"></div>
+          <div class="ghint">Admin akan membuat password sementara dan menyampaikannya kepada Anda. Saat masuk dengan password sementara itu, Anda diminta menggantinya.</div>
+          <div id="rsMsg" class="gnote" style="color:#b4361f;min-height:16px;margin:2px 0 8px"></div>
+          <button class="gmasuk" id="rsGo" type="button">Kirim permintaan reset</button>
+          <div class="glinks"><a href="#" id="rsBack">← Kembali ke halaman masuk</a></div>
+        </div>
+        <div id="doneBox" style="display:none">
+          <div class="dic" aria-hidden="true">✓</div>
+          <h3 id="doneT"></h3><p id="doneP"></p>
+          <button class="gmasuk" id="doneBack" type="button">Kembali ke halaman masuk</button>
         </div>
       </div>
       <div id="gMain" style="display:none">
-      <div class="gs">Pilih BAM dan cabang, lalu tekan tombol Masuk</div>
+      <div class="gs">Pilih BAM / cabang yang ingin ditampilkan, lalu tekan Terapkan</div>
       <div class="gf"><label for="gBam">BAM</label><select id="gBam"><option value="">Memuat…</option></select></div>
       <div id="gList"></div>
-      <button class="gmasuk" id="gGo">Masuk</button>
+      <button class="gmasuk" id="gGo">Terapkan</button>
       <button type="button" class="gadm" id="gAdmToggle" aria-expanded="false"><i>▸</i><span>Masuk sebagai administrator</span></button>
       <div id="gAdmBox">
         <div class="gf"><label for="gPw">Password administrator</label>
@@ -594,9 +696,8 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
         <button type="button" class="gaktif" id="gAdmOn">Aktifkan</button>
       </div>
       <div class="gact" id="gAct" style="display:none"><button class="b s" id="gAdm" style="display:none"><svg class="ic" aria-hidden="true"><use href="#i-unlock"/></svg><span id="gAdmTx">Administrator aktif · Keluar</span></button><button class="b s" id="gX" style="display:none">Batal</button></div>
-      <div id="gUser" style="text-align:center;font-size:12px;color:#64748b;margin:12px 0 0"><span id="gUserTx"></span> · <a href="#" id="gPwChg">Ganti password</a> · <a href="#" id="gOut">Keluar</a></div>
       </div>
-      <div class="gcredit">Dikembangkan oleh <b>Fahrur Rozy</b></div>
+
     </div>
   </div>
 </div>
@@ -611,7 +712,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     </g>
     <path class="hrt" d="M72 88C60 79 60 70 66 70c3 0 5 2 6 4 1-2 3-4 6-4 6 0 6 9-6 18z" fill="#e53935"/>
   </symbol>
-  <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h7M11.5 11v8"/></symbol><symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol><symbol id="i-building" viewBox="0 0 24 24"><path d="M4.5 21V6.5L12 3l7.5 3.5V21"/><path d="M9.5 21v-5h5v5M8.5 10h1M14.5 10h1M8.5 13h1M14.5 13h1"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol><symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3.5 3.5l17 17"/><path d="M10.2 5.7c.6-.1 1.2-.2 1.8-.2 6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-3.1 3.8M6.6 7.4A16 16 0 0 0 2.5 12S6 18.5 12 18.5c1.5 0 2.8-.3 4-.9"/><path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 3.7"/></symbol><symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.5a4 4 0 0 1 7.6-1.7"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol><symbol id="i-check-square" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.2l2.6 2.6 4.6-5"/></symbol><symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4.5v4.2h4.2"/></symbol><symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3.5H4.5V7M16 3.5h3.5V7M8 20.5H4.5V17M16 20.5h3.5V17"/></symbol><symbol id="i-collapse" viewBox="0 0 24 24"><path d="M4 8h4V4M20 8h-4V4M4 16h4v4M20 16h-4v4"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 006 6.3L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M4 13a8 8 0 0014 4.7l2-2.2"/><path d="M20 20v-4.5h-4.5"/></symbol><symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M7.5 9L12 4.5 16.5 9"/><path d="M5 19.5h14"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 11l4.5 4.5 4.5-4.5"/><path d="M5 19.5h14"/></symbol><symbol id="i-chev" viewBox="0 0 24 24"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></symbol><symbol id="i-compare" viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></symbol><symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><path d="M9.2 4.5v15M14.8 4.5v15"/></symbol><symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/></symbol><symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5l1.4-5h13.2l1.4 5"/><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M5.5 12.5V20h13v-7.5M10 20v-4.5h4V20"/></symbol><symbol id="i-rank" viewBox="0 0 24 24"><path d="M5 20V12M12 20V5M19 20v-9"/><path d="M3.5 20.5h17"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/></symbol><symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6.2 7.6V19l-3.6-1.8v-4.6z"/></symbol><symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3.5" y="6.5" width="17" height="13" rx="2.5"/><path d="M3.5 10.5h17M16 15h1.5"/></symbol><symbol id="i-trend" viewBox="0 0 24 24"><path d="M3.5 17l5.5-6 4 4 7-8"/><path d="M15.5 7h5v5"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 15.5H3z"/><path d="M12 10v4.2M12 17.2h.01"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.5 19.5l.8-4L16 4.8a2 2 0 0 1 2.9 0l.3.3a2 2 0 0 1 0 2.9L8.5 18.7z"/><path d="M13.5 7.5l3 3"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></symbol><symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M16 7l3 3M14 9l2 2"/></symbol><symbol id="i-sheet" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h7M11.5 11v8"/></symbol><symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></symbol><symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol><symbol id="i-building" viewBox="0 0 24 24"><path d="M4.5 21V6.5L12 3l7.5 3.5V21"/><path d="M9.5 21v-5h5v5M8.5 10h1M14.5 10h1M8.5 13h1M14.5 13h1"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol><symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3.5 3.5l17 17"/><path d="M10.2 5.7c.6-.1 1.2-.2 1.8-.2 6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-3.1 3.8M6.6 7.4A16 16 0 0 0 2.5 12S6 18.5 12 18.5c1.5 0 2.8-.3 4-.9"/><path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 3.7"/></symbol><symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/><path d="M8 10.5V7.5a4 4 0 0 1 7.6-1.7"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol><symbol id="i-check-square" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.2l2.6 2.6 4.6-5"/></symbol><symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4.5v4.2h4.2"/></symbol><symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3.5H4.5V7M16 3.5h3.5V7M8 20.5H4.5V17M16 20.5h3.5V17"/></symbol><symbol id="i-collapse" viewBox="0 0 24 24"><path d="M4 8h4V4M20 8h-4V4M4 16h4v4M20 16h-4v4"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11A8 8 0 006 6.3L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M4 13a8 8 0 0014 4.7l2-2.2"/><path d="M20 20v-4.5h-4.5"/></symbol><symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M7.5 9L12 4.5 16.5 9"/><path d="M5 19.5h14"/></symbol><symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 11l4.5 4.5 4.5-4.5"/><path d="M5 19.5h14"/></symbol><symbol id="i-chev" viewBox="0 0 24 24"><path d="M6.5 9.5l5.5 5.5 5.5-5.5"/></symbol><symbol id="i-compare" viewBox="0 0 24 24"><path d="M4 8h14l-3.5-3.5M20 16H6l3.5 3.5"/></symbol><symbol id="i-columns" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><path d="M9.2 4.5v15M14.8 4.5v15"/></symbol><symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/></symbol><symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5l1.4-5h13.2l1.4 5"/><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M5.5 12.5V20h13v-7.5M10 20v-4.5h4V20"/></symbol><symbol id="i-rank" viewBox="0 0 24 24"><path d="M5 20V12M12 20V5M19 20v-9"/><path d="M3.5 20.5h17"/></symbol><symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/></symbol><symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6.2 7.6V19l-3.6-1.8v-4.6z"/></symbol><symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3.5" y="6.5" width="17" height="13" rx="2.5"/><path d="M3.5 10.5h17M16 15h1.5"/></symbol><symbol id="i-trend" viewBox="0 0 24 24"><path d="M3.5 17l5.5-6 4 4 7-8"/><path d="M15.5 7h5v5"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 15.5H3z"/><path d="M12 10v4.2M12 17.2h.01"/></symbol><symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol><symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.5 19.5l.8-4L16 4.8a2 2 0 0 1 2.9 0l.3.3a2 2 0 0 1 0 2.9L8.5 18.7z"/><path d="M13.5 7.5l3 3"/></symbol><symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12.5h9.4L17.5 7M10 11v5M14 11v5"/></symbol>
 </svg>
 <header>
   <svg class="hbg" aria-hidden="true"><rect width="100%" height="100%" fill="url(#batikH)"/></svg>
@@ -635,13 +736,25 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
       <button id="bMaster" class="mx" title="Buka halaman Download Master Excel: pilih bulan, pembanding, dan isi file"><svg class="ic" aria-hidden="true"><use href="#i-sheet"/></svg>Master Excel</button>
     </span>
     <button id="bGempar" type="button" title="Kelola tanggal Gempar (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg>Gempar</button>
-    <button id="bAdm" type="button" title="Kelola pengguna (hanya Admin Pusat)"><svg class="ic" aria-hidden="true"><use href="#i-unlock"/></svg>Admin</button>
+    <button id="bAdm" type="button" title="Kelola pengguna (hanya Admin Pusat)"><svg class="ic" aria-hidden="true"><use href="#i-unlock"/></svg>Admin<span class="bdg" id="admBdg" style="display:none"></span></button>
     <button id="bRfHp" type="button" title="Perbarui ringkasan data (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
     <button id="bData" type="button" title="Upload / edit / hapus data (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Data</button>
     <div class="chip" id="upd" title="Waktu terakhir isi sheet STOCK atau SALES berubah">Memuat…</div>
   </div>
+  <div class="umenu" style="display:none">
+    <button id="uBtn" type="button" aria-haspopup="true" aria-expanded="false" title="Akun saya">
+      <span class="uav" id="uAv">?</span>
+      <span class="utx"><b id="uNm"></b><small id="uRl"></small></span>
+      <svg class="ic ch" aria-hidden="true"><use href="#i-chev"/></svg>
+    </button>
+  </div>
   </div>
 </header>
+<div id="uPop" role="menu" style="display:none">
+  <div class="uhd"><b id="uPn"></b><span id="uPm"></span><span id="uPa"></span></div>
+  <button type="button" id="uPw" role="menuitem"><svg class="ic" aria-hidden="true"><use href="#i-key"/></svg>Ganti password</button>
+  <button type="button" id="uOut" role="menuitem" class="out"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg>Keluar</button>
+</div>
 
 <main><div class="wrap">
   <div id="warn"></div>
@@ -758,7 +871,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
       </div>
     </div>
     <div id="rInfo"></div>
-    <div id="rOut"><div class="card empty" style="margin-top:8px"><div class="e"><svg class="ic" aria-hidden="true"><use href="#i-rank"/></svg></div><div>Pilih BAM dan cabang di gerbang untuk menampilkan rank.</div></div></div>
+    <div id="rOut"><div class="card empty" style="margin-top:8px"><div class="e"><svg class="ic" aria-hidden="true"><use href="#i-rank"/></svg></div><div>Memuat rank…</div></div></div>
   </section>
 
   <!-- ===== Halaman Trend / History (Coming Soon) ===== -->
@@ -847,17 +960,32 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
 <div id="usW" style="display:none;position:fixed;inset:0;z-index:250;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">
  <div style="background:#fff;color:#1f2937;border-radius:16px;width:820px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.35)">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e3e6ea"><b style="font-size:13px">Kelola Pengguna</b><button class="b s" id="usX" type="button"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
-  <div class="amn">Setiap pengguna masuk dengan <b>NIK</b>. Area = daftar BAM yang boleh dilihat. <b>Admin Pusat</b> melihat semua BAM. Password sementara hanya tampil <b>sekali</b>; pengguna wajib menggantinya saat masuk pertama.</div>
-  <div id="usTmp" class="amn" style="display:none;background:#fff7e6;border:1px solid #f5c97a;margin:0 12px;border-radius:8px"></div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid #e3e6ea">
+  <div id="usTmp" class="amn" style="display:none;background:#fff7e6;border:1px solid #f5c97a;margin:8px 12px 0;border-radius:8px"></div>
+  <div class="ustabs" role="tablist">
+    <button type="button" id="usTabU" class="on" role="tab">Pengguna</button>
+    <button type="button" id="usTabR" role="tab">Pendaftaran<span id="tabRegN"></span></button>
+    <button type="button" id="usTabX" role="tab">Reset password<span id="tabRstN"></span></button>
+  </div>
+  <div id="usPaneU" style="display:flex;flex-direction:column;min-height:0">
+   <div class="amn">Setiap pengguna masuk dengan <b>NIK</b>. Area = daftar BAM yang boleh dilihat. <b>Admin Pusat</b> melihat semua BAM. Password sementara hanya tampil <b>sekali</b>; pengguna wajib menggantinya saat masuk pertama.</div>
+   <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid #e3e6ea">
     <input id="usNik" placeholder="NIK" style="width:120px" autocomplete="off">
     <input id="usNama" placeholder="Nama" style="flex:1;min-width:140px" autocomplete="off">
     <select id="usJab"></select>
     <input id="usBam" placeholder="BAM (pisahkan koma)" style="flex:1;min-width:150px" autocomplete="off">
     <button class="b p" id="usAdd" type="button">+ Tambah</button>
+   </div>
+   <div id="usHint" class="amn" style="padding-top:0"></div>
+   <div style="overflow:auto;padding:0 12px 12px"><table><thead><tr><th>NIK</th><th>Nama</th><th>Jabatan</th><th>Area (BAM)</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="usL"><tr><td colspan="6">Memuat…</td></tr></tbody></table></div>
   </div>
-  <div id="usHint" class="amn" style="padding-top:0"></div>
-  <div style="overflow:auto;padding:0 12px 12px"><table><thead><tr><th>NIK</th><th>Nama</th><th>Jabatan</th><th>Area (BAM)</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="usL"><tr><td colspan="6">Memuat…</td></tr></tbody></table></div>
+  <div id="usPaneR" style="display:none;flex-direction:column;min-height:0">
+   <div class="amn">Orang yang mendaftar sendiri. <b>Jabatan dan area yang mereka isi hanya permintaan</b> — periksa, perbaiki bila perlu, lalu setujui. Setelah disetujui mereka masuk dengan password yang mereka buat sendiri.</div>
+   <div id="rgL" class="rqlist"></div>
+  </div>
+  <div id="usPaneX" style="display:none;flex-direction:column;min-height:0">
+   <div class="amn">Pengguna yang lupa password. Tekan <b>Buat password sementara</b>, lalu sampaikan password itu langsung kepada pemiliknya (mis. lewat WhatsApp). Ia wajib menggantinya saat masuk.</div>
+   <div id="rsL" class="rqlist"></div>
+  </div>
  </div></div>
 <div id="amW" style="display:none;position:fixed;inset:0;z-index:250;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">
  <div style="background:#fff;color:#1f2937;border-radius:16px;width:700px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.35)">
@@ -897,28 +1025,51 @@ window.google={script:{get run(){return mk()}}};
 
 /* ================= LOGIN NIK ================= */
 let STARTED=false;
-function gView(v){   // 'login' | 'pw' | 'main'
-  $('#gAuth').style.display=v==='main'?'none':'';
-  $('#gMain').style.display=v==='main'?'':'none';
-  $('#nikForm').style.display=v==='login'?'':'none';
-  $('#pwForm').style.display=v==='pw'?'':'none';
-  $('#gate').style.display='flex';
+const GV={login:'#nikForm',pw:'#pwForm',reg:'#regForm',rst:'#rstForm',done:'#doneBox'};
+function eyeReset(){document.querySelectorAll('.geye[data-for]').forEach(b=>{const i=$('#'+b.dataset.for);if(i)i.type='password';b.innerHTML='<svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg>';b.setAttribute('aria-label','Tampilkan password')})}
+function gView(v){   // 'login' | 'pw' | 'reg' | 'rst' | 'done' | 'main' (dialog pilih cabang)
+  const auth=v!=='main';
+  $('#gAuth').style.display=auth?'':'none';
+  $('#gMain').style.display=auth?'none':'';
+  for(const k in GV)$(GV[k]).style.display=v===k?'':'none';
+  eyeReset();$('#gate').style.display='flex';$('#gate').scrollTop=0;
 }
-function showLogin(msg){gView('login');$('#nikMsg').textContent=msg||'';$('#nikPw').value='';setTimeout(()=>{const e=$('#nikNik');if(e)e.focus()},50)}
-function showPw(old,msg){gView('pw');$('#pwOld').value=old||'';$('#pwNew').value='';$('#pwNew2').value='';$('#pwMsg').textContent=msg||''}
+function focusSoon(sel){setTimeout(()=>{const e=$(sel);if(e)e.focus()},50)}
+function showLogin(msg){gView('login');$('#nikMsg').textContent=msg||'';$('#nikPw').value='';focusSoon('#nikNik')}
+function showPw(old,msg){
+  const forced=!ME||ME.must_change;   // dipaksa (password sementara) atau pilihan sendiri lewat menu pengguna
+  gView('pw');
+  $('#pwSub').textContent=forced?'Ganti password dulu sebelum melanjutkan':'Ganti password Anda';
+  $('#pwOldL').textContent=forced?'Password lama (sementara)':'Password lama';
+  $('#pwCancel').style.display=forced?'none':'block';
+  $('#pwOut').style.display=forced?'block':'none';
+  $('#pwOld').value=old||'';$('#pwNew').value='';$('#pwNew2').value='';$('#pwMsg').textContent=msg||'';
+  focusSoon(old?'#pwNew':'#pwOld');
+}
+function showReg(){gView('reg');$('#rgMsg').textContent='';focusSoon('#rgNik')}
+function showRst(){gView('rst');$('#rsMsg').textContent='';$('#rsNik').value=$('#nikNik').value.trim();focusSoon($('#rsNik').value?'#rsKontak':'#rsNik')}
+function gDone(t,p){$('#doneT').textContent=t;$('#doneP').textContent=p;gView('done')}
 function authNeeded(code){
   EXPIRED=true;
   if(code==='MUST_CHANGE')showPw('','Ganti password dulu untuk melanjutkan.');
   else showLogin('Sesi berakhir atau belum masuk. Silakan masuk lagi.');
+}
+
+/* Masuk langsung ke halaman utama. Data SUDAH dibatasi di server sesuai area pengguna,
+   jadi tidak perlu memilih BAM lagi (pilihan cabang tetap bisa dibuka lewat chip cakupan di header). */
+function autoEnter(u){
+  const all=u.bam_scope===null,sc=u.bam_scope||[];
+  enter('*',all?'SEMUA BAM':(sc.join(' + ')||'Belum ada area'),null,'Semua Cabang');
+  if(!all&&!sc.length)toast('Akun Anda belum punya area BAM. Hubungi admin.',6000);
 }
 function startApp(u){
   if(EXPIRED){location.reload();return}
   ME=u;
   TOKEN=(u.can&&u.can.edit)?'sesi':'';MPW=(u.can&&u.can.users)?'sesi':'';VIEWER='';
   ADMBAM=u.jabatan==='ADMIN_KOORBAM'?(u.bam_scope||[]).map(x=>String(x).toUpperCase()):null;
-  SCOPE=null;GB=null;GSEL.clear();
-  $('#gUserTx').textContent=u.nama+' · '+u.label;
-  gView('main');gateOpen();
+  GB=null;GSEL.clear();
+  gAdmUI();umRender(u);autoEnter(u);
+  if(u.can&&u.can.users)refreshPending();else setPending(null);
   if(!STARTED){STARTED=true;load(false)}
 }
 async function doLogin(){
@@ -940,9 +1091,32 @@ async function doChangePw(){
   $('#pwGo').disabled=true;$('#pwMsg').textContent='';
   try{
     await api('/api/auth/change-password',{old:o,new:n});
-    const me=await api('/api/auth/me');startApp(me.user);
+    const me=await api('/api/auth/me');startApp(me.user);toast('Password berhasil diganti',3000);
   }catch(e){$('#pwMsg').textContent=e.message||'Gagal mengganti password'}
   finally{$('#pwGo').disabled=false}
+}
+async function doRegister(){
+  const v=id=>$('#'+id).value.trim(),msg=t=>{$('#rgMsg').textContent=t};
+  const nik=v('rgNik'),nama=v('rgNama'),jab=$('#rgJab').value,area=v('rgArea'),kontak=v('rgKontak'),pw=$('#rgPw').value,pw2=$('#rgPw2').value;
+  if(!nik||!nama||!jab||!area||!pw){msg('Lengkapi NIK, nama, jabatan, area BAM, dan password.');return}
+  if(pw!==pw2){msg('Ulangi password dengan benar.');return}
+  $('#rgGo').disabled=true;msg('');
+  try{
+    await api('/api/auth/register',{nik,nama,jabatan:jab,area,kontak,password:pw});
+    $('#rgPw').value='';$('#rgPw2').value='';
+    gDone('Pendaftaran terkirim','Admin akan memeriksa jabatan dan area Anda. Setelah disetujui, Anda bisa masuk dengan NIK dan password yang baru Anda buat.');
+  }catch(e){msg(e.message||'Gagal mengirim pendaftaran')}
+  finally{$('#rgGo').disabled=false}
+}
+async function doReset(){
+  const nik=$('#rsNik').value.trim(),kontak=$('#rsKontak').value.trim(),msg=t=>{$('#rsMsg').textContent=t};
+  if(!nik){msg('Isi NIK Anda.');return}
+  $('#rsGo').disabled=true;msg('');
+  try{
+    const j=await api('/api/auth/reset-request',{nik,kontak});
+    gDone('Permintaan terkirim',j.message||'Permintaan reset diteruskan ke admin.');
+  }catch(e){msg(e.message||'Gagal mengirim permintaan')}
+  finally{$('#rsGo').disabled=false}
 }
 async function doLogout(){try{await api('/api/auth/logout',{})}catch(e){}location.reload()}
 async function bootAuth(){
@@ -954,14 +1128,61 @@ async function bootAuth(){
     else{showLogin('Tidak bisa menghubungi server: '+(e.message||e))}
   }
 }
+const onEnter=(sel,fn)=>{$(sel).onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();fn()}}};
+document.querySelectorAll('.geye[data-for]').forEach(b=>{b.onclick=()=>{
+  const i=$('#'+b.dataset.for),hide=i.type==='password';
+  i.type=hide?'text':'password';
+  b.innerHTML='<svg class="ic" aria-hidden="true"><use href="#i-'+(hide?'eye-off':'eye')+'"/></svg>';
+  b.setAttribute('aria-label',hide?'Sembunyikan password':'Tampilkan password');i.focus();
+}});
 $('#nikGo').onclick=doLogin;
-$('#nikPw').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();doLogin()}};
+onEnter('#nikPw',doLogin);
 $('#nikNik').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#nikPw').focus()}};
-$('#pwGo').onclick=doChangePw;
-$('#pwNew2').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();doChangePw()}};
+$('#pwGo').onclick=doChangePw;onEnter('#pwNew2',doChangePw);
 $('#pwOut').onclick=doLogout;
-$('#gOut').onclick=e=>{e.preventDefault();doLogout()};
-$('#gPwChg').onclick=e=>{e.preventDefault();showPw('','')};
+$('#pwCancel').onclick=()=>{$('#gate').style.display='none'};
+$('#goReg').onclick=e=>{e.preventDefault();showReg()};
+$('#goRst').onclick=e=>{e.preventDefault();showRst()};
+$('#rgBack').onclick=e=>{e.preventDefault();showLogin('')};
+$('#rsBack').onclick=e=>{e.preventDefault();showLogin('')};
+$('#doneBack').onclick=()=>showLogin('');
+$('#rgGo').onclick=doRegister;onEnter('#rgPw2',doRegister);
+$('#rsGo').onclick=doReset;onEnter('#rsKontak',doReset);onEnter('#rsNik',doReset);
+
+/* ================= MENU PENGGUNA (header) ================= */
+function umRender(u){
+  const nm=u.nama||u.nik;
+  $('#uAv').textContent=(String(nm).trim()[0]||'?').toUpperCase();
+  $('#uNm').textContent=nm;$('#uRl').textContent=u.label;
+  $('#uPn').textContent=nm;$('#uPm').textContent='NIK '+u.nik+' · '+u.label;
+  $('#uPa').textContent='Area: '+(u.bam_scope===null?'Semua BAM':((u.bam_scope||[]).join(', ')||'belum ditentukan'));
+  document.querySelector('.umenu').style.display='';
+}
+function umOpen(on){
+  const p=$('#uPop'),b=$('#uBtn');
+  if(on){
+    p.style.display='block';
+    const r=b.getBoundingClientRect(),w=p.offsetWidth;
+    p.style.top=(r.bottom+6)+'px';p.style.left=Math.max(8,Math.min(r.right-w,innerWidth-w-8))+'px';
+  }else p.style.display='none';
+  b.setAttribute('aria-expanded',String(!!on));
+}
+$('#uBtn').onclick=e=>{e.stopPropagation();umOpen($('#uPop').style.display!=='block')};
+document.addEventListener('click',e=>{if(!e.target.closest('#uPop'))umOpen(false)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')umOpen(false)});
+addEventListener('resize',()=>umOpen(false));
+addEventListener('scroll',()=>umOpen(false),true);
+$('#uPw').onclick=()=>{umOpen(false);showPw('','')};
+$('#uOut').onclick=()=>{umOpen(false);doLogout()};
+
+/* lencana jumlah permintaan yang menunggu (khusus Admin Pusat) */
+let PEND={reg:0,rst:0};
+function setPending(p){
+  PEND=p||{reg:0,rst:0};const n=(PEND.reg||0)+(PEND.rst||0),b=$('#admBdg');
+  b.textContent=n>99?'99+':String(n);b.style.display=n?'':'none';
+  $('#tabRegN').textContent=PEND.reg?' ('+PEND.reg+')':'';$('#tabRstN').textContent=PEND.rst?' ('+PEND.rst+')':'';
+}
+async function refreshPending(){try{const j=await api('/api/auth/me');setPending(j.pending)}catch(e){}}
 
 /* ================= KELOLA PENGGUNA (Admin Pusat) ================= */
 let US=null;
@@ -1009,6 +1230,70 @@ $('#usAdd').onclick=async()=>{
   }catch(err){toast(err.message||'Gagal',4000)}
 };
 $('#usX').onclick=()=>{$('#usW').style.display='none';usTmp('')};
+/* --- tab: Pengguna | Pendaftaran | Reset password --- */
+let RQ=null;
+function usTab(t){
+  ['U','R','X'].forEach(k=>{const on=k.toLowerCase()===t;$('#usPane'+k).style.display=on?'flex':'none';$('#usTab'+k).classList.toggle('on',on)});
+  if(t!=='u')rqLoad();
+}
+$('#usTabU').onclick=()=>usTab('u');$('#usTabR').onclick=()=>usTab('r');$('#usTabX').onclick=()=>usTab('x');
+const rqDate=v=>{if(!v)return '';const d=new Date(/[TZ]/.test(String(v))?v:String(v).replace(' ','T')+'Z');return isNaN(d)?'':d.toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})};
+const guessBam=(area,list)=>{const a=norm(area);return a?list.filter(b=>{const n=norm(b);return n&&(a.includes(n)||n.includes(a))}):[]};
+async function rqLoad(){
+  try{
+    RQ=await api('/api/admin/requests');
+    setPending({reg:RQ.registrations.length,rst:RQ.resets.length});rqDraw();
+  }catch(e){const m='<div class="rqe" style="color:#b4361f">'+esc(e.message||e)+'</div>';$('#rgL').innerHTML=m;$('#rsL').innerHTML=m}
+}
+function rqDraw(){
+  $('#rgL').innerHTML=RQ.registrations.map(r=>{
+    const g=guessBam(r.area_diminta,RQ.bamList);
+    return `<div class="rqc" data-id="${r.id}">
+      <div class="rqh"><b>${esc(r.nama)}</b><span>NIK ${esc(r.nik)}</span><span class="rqd">${esc(rqDate(r.created_at))}</span></div>
+      <div class="rqm">Mengaku <b>${esc(r.label_diminta)}</b> · area yang ditulis: <b>${esc(r.area_diminta)}</b>${r.kontak?' · WA '+esc(r.kontak):''}</div>
+      <div class="rqa">
+        <label>Jabatan yang benar<select class="rqj">${RQ.jabatan.map(j=>`<option value="${esc(j.key)}"${j.key===r.jabatan_diminta?' selected':''}>${esc(j.label)}</option>`).join('')}</select></label>
+        <label class="rqb">Area BAM (pisahkan koma)<input class="rqb" value="${esc(g.join(', '))}" placeholder="${esc(RQ.bamList.join(', ')||'belum ada data toko')}"></label>
+        <span class="rqx"><button class="b p" data-a="approve" type="button">Setujui</button><button class="b s" data-a="reject" type="button">Tolak</button></span>
+      </div></div>`}).join('')||'<div class="rqe">Tidak ada pendaftaran yang menunggu.</div>';
+  $('#rsL').innerHTML=RQ.resets.map(r=>`<div class="rqc" data-id="${r.id}">
+      <div class="rqh"><b>${esc(r.nama||'(NIK tidak dikenal)')}</b><span>NIK ${esc(r.nik)}${r.label?' · '+esc(r.label):''}</span><span class="rqd">${esc(rqDate(r.created_at))}</span></div>
+      <div class="rqm">${r.kontak?'Hubungi: <b>'+esc(r.kontak)+'</b>':'Tidak mencantumkan kontak.'}</div>
+      <div class="rqa"><span class="rqx" style="margin-left:0"><button class="b p" data-a="reset" type="button">Buat password sementara</button><button class="b s" data-a="dismiss" type="button">Abaikan</button></span></div>
+    </div>`).join('')||'<div class="rqe">Tidak ada permintaan reset yang menunggu.</div>';
+}
+$('#rgL').onclick=async e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  const c=b.closest('.rqc'),id=+c.dataset.id;
+  try{
+    if(b.dataset.a==='approve'){
+      const jab=c.querySelector('.rqj').value,bam=usBam(c.querySelector('input.rqb').value);
+      if(jab!=='ADMIN_PUSAT'&&!bam.length){toast('Isi area BAM dulu');return}
+      b.disabled=true;
+      const j=await api('/api/admin/requests',{action:'approve',id,jabatan:jab,bam_scope:bam});
+      toast('Disetujui — '+j.nik+' sekarang bisa masuk',3500);
+      if(j.unknownBam&&j.unknownBam.length)toast('Peringatan: BAM tidak ada di data toko: '+j.unknownBam.join(', '),5500);
+    }else{
+      const t=prompt('Alasan penolakan (boleh kosong; akan terlihat oleh pendaftar saat mencoba masuk):','');if(t===null)return;
+      await api('/api/admin/requests',{action:'reject',id,catatan:t});toast('Pendaftaran ditolak');
+    }
+    await rqLoad();usLoad();
+  }catch(err){toast(err.message||'Gagal',4000);rqLoad()}
+};
+$('#rsL').onclick=async e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  const c=b.closest('.rqc'),id=+c.dataset.id,r=RQ.resets.find(x=>x.id===id);
+  try{
+    if(b.dataset.a==='reset'){
+      if(!confirm('Buat password sementara untuk '+(r?r.nik:'')+'? Password lama langsung tidak berlaku.'))return;
+      b.disabled=true;
+      const j=await api('/api/admin/requests',{action:'reset',id});
+      usTmp('Password sementara untuk <b>'+esc(j.nik)+'</b>: <b style="font-family:monospace;font-size:14px">'+esc(j.tempPassword)+'</b><br>'+(r&&r.kontak?'Sampaikan lewat WA '+esc(r.kontak)+'. ':'')+'Catat sekarang, tidak akan ditampilkan lagi.');
+    }else await api('/api/admin/requests',{action:'dismiss',id});
+    await rqLoad();usLoad();
+  }catch(err){toast(err.message||'Gagal',4000);rqLoad()}
+};
+
 /* ================= util ================= */
 const KEYS=['cab','bas','as','tk','ds','jn'];
 const LABEL={bam:'BAM',pnl:'CAB PNL',cab:'CABANG',bas:'BAS',bastr:'BASTR',am:'AM',as:'AS',tk:'KODE / TOKO',ds:'DESKRIPSI',jn:'JENIS'};
@@ -1400,7 +1685,7 @@ async function amLoad(){abLoad();
     <td><button class="b" data-a="tog" data-id="${a.id}">${a.aktif?'Nonaktifkan':'Aktifkan'}</button><button class="b" data-a="pw" data-id="${a.id}">Ganti password</button><button class="b" data-a="del" data-id="${a.id}">Hapus</button></td></tr>`).join('')
     :'<tr><td colspan="5" style="color:#64748b">Belum ada Administrator Lihat.</td></tr>';
 }
-$('#bAdm').onclick=()=>{if(!ME||!ME.can||!ME.can.users){toast('Hanya Admin Pusat');return}$('#usW').style.display='flex';usLoad()};
+$('#bAdm').onclick=()=>{if(!ME||!ME.can||!ME.can.users){toast('Hanya Admin Pusat');return}$('#usW').style.display='flex';usLoad();usTab(PEND.reg?'r':PEND.rst?'x':'u')};
 $('#amX').onclick=()=>{$('#amW').style.display='none'};
 $('#amW').onclick=e=>{if(e.target===$('#amW'))$('#amW').style.display='none'};
 $('#amAdd').onclick=async()=>{
@@ -3642,7 +3927,7 @@ let VIEWER='',MPW='';   // VIEWER = nama Administrator Lihat (hanya-lihat, semua
 let ADMBAM=null;   // null = administrator utama; array nama BAM = administrator BAM (hanya kelola data BAM itu)
 const isFull=()=>!!TOKEN&&!ADMBAM;   // GSEL: cabang yang ditandai di gerbang; kosong = Semua Cabang
 function gateOpen(){
-  $('#gate').style.display='flex';gAdmToggle(false);
+  gView('main');gAdmToggle(false);
   $('#gX').style.display=SCOPE?'':'none';gAdmUI();
   if(GB)drawGate();else loadGB();
 }
@@ -3665,11 +3950,10 @@ const gabOf=v=>/^g\d+$/.test(v)?BAM_GABUNG[+v.slice(1)]:null;
 function drawGate(){
   if(!GB)return;
   const sel=$('#gBam');let cur=sel.value||(SCOPE?SCOPE.key:'');
-  if(cur==='*'&&!isFull()&&!VIEWER)cur='';
   const ord=GB.bam.map((_,i)=>i).sort((a,b)=>CO(GB.bam[a],GB.bam[b]));
   const ab=ADMBAM?ADMBAM.map(norm):null,ordA=ab?ord.filter(i=>ab.includes(norm(GB.bam[i]))):ord;   // admin BAM: hanya BAM miliknya
   const miss=ab?ADMBAM.filter(b=>!GB.bam.some(x=>norm(x)===norm(b))):[];   // BAM baru yang belum punya data toko
-  sel.innerHTML=(ab&&ordA.length+miss.length===1?'':'<option value="">Pilih BAM…</option>')+(isFull()||VIEWER?'<option value="*">SEMUA BAM (administrator)</option>':'')
+  sel.innerHTML=(ab&&ordA.length+miss.length===1?'':'<option value="">Pilih BAM…</option>')+'<option value="*">'+(ME&&ME.bam_scope===null?'SEMUA BAM':'SEMUA BAM di area saya')+'</option>'
     +ordA.map(i=>`<option value="${i}">${esc(GB.bam[i])}</option>`).join('')
     +miss.map(b=>`<option value="t:${esc(b)}">${esc(b)} (belum ada data)</option>`).join('')
     +(ab?'':BAM_GABUNG.map((g,i)=>gabIdx(g).size?`<option value="g${i}">${esc(g.label)} (gabungan)</option>`:'').join(''));
@@ -3700,7 +3984,6 @@ $('#gList').onclick=e=>{
   drawList();
 };
 function enter(key,bam,names,label){
-  if(names===null&&!TOKEN){toast('Hanya administrator');return}
   SCOPE=names?{key,bam,all:false,names,cabs:new Set(names.map(norm)),label}:{key,bam,all:true,names:[],cabs:new Set(),label};
   $('#gate').style.display='none';
   const c=$('#scp');c.style.display='';

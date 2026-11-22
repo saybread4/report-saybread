@@ -19,7 +19,22 @@ export async function handle({ request }, db) {
   const bad = () => new HttpError(401, 'NIK atau password salah.', 'BAD_LOGIN');   // pesan sama untuk semua kegagalan
 
   if (!u) {
-    await verifyPassword(pw, DUMMY);                       // samakan waktu respons
+    // Belum jadi pengguna: mungkin pendaftarannya masih menunggu / ditolak. Pesan khusus hanya diberikan
+    // bila password cocok dengan yang didaftarkan, supaya status NIK orang lain tidak bisa diintip.
+    let reg = null;
+    try {
+      reg = (await db.query('SELECT status, catatan, pw_hash, pw_salt, pw_iter FROM registrations WHERE nik = ? ORDER BY id DESC LIMIT 1', [nik]))[0] || null;
+    } catch (e) { console.error('registrations belum ada?', e); }       // tabel belum dimigrasi: perlakukan seperti NIK tak dikenal
+    if (reg && reg.status !== 'APPROVED') {
+      if (await verifyPassword(pw, reg)) {
+        await audit(db, { nik, aksi: 'login_ditolak', detail: 'pendaftaran ' + reg.status });
+        if (reg.status === 'PENDING')
+          throw new HttpError(403, 'Pendaftaran Anda masih menunggu verifikasi admin. Anda bisa masuk setelah disetujui.', 'PENDING');
+        throw new HttpError(403, 'Pendaftaran Anda ditolak' + (reg.catatan ? ': ' + reg.catatan : '.') + ' Silakan hubungi admin.', 'REJECTED');
+      }
+    } else {
+      await verifyPassword(pw, DUMMY);                     // samakan waktu respons
+    }
     await audit(db, { nik, aksi: 'login_gagal', detail: 'nik tidak terdaftar' });
     throw bad();
   }

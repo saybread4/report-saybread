@@ -372,3 +372,40 @@ CREATE TABLE audit_log (                      -- jejak login / ganti / reset pas
   PRIMARY KEY (id),
   KEY idx_audit_waktu (waktu)
 );
+
+-- ----------------------------------------------------------------------------
+--  5. DAFTAR AKUN & RESET PASSWORD (tahap 1d) — sama dengan migrasi-1d.sql
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS registrations (
+  id              BIGINT NOT NULL AUTO_INCREMENT,
+  nik             VARCHAR(30)  NOT NULL,
+  nama            VARCHAR(150) NOT NULL,
+  jabatan_diminta VARCHAR(50)  NOT NULL,
+  area_diminta    VARCHAR(200) NOT NULL,          -- teks bebas dari pendaftar (mis. nama BAM)
+  kontak          VARCHAR(60),                    -- WA/HP, opsional, agar admin bisa menghubungi
+  pw_hash         VARCHAR(128) NOT NULL,          -- password pilihan pendaftar (di-hash); dipakai saat disetujui
+  pw_salt         VARCHAR(64)  NOT NULL,
+  pw_iter         INT          NOT NULL DEFAULT 100000,
+  status          VARCHAR(12)  NOT NULL DEFAULT 'PENDING',   -- PENDING | APPROVED | REJECTED
+  catatan         VARCHAR(250),                   -- alasan penolakan
+  diproses_oleh   VARCHAR(30),
+  diproses_at     DATETIME NULL,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_reg_nik (nik, status),
+  KEY idx_reg_status (status, created_at)
+);
+
+-- Permintaan reset password. Tidak mengubah password apa pun sampai Admin Pusat memprosesnya.
+CREATE TABLE IF NOT EXISTS reset_requests (
+  id            BIGINT NOT NULL AUTO_INCREMENT,
+  nik           VARCHAR(30) NOT NULL,
+  kontak        VARCHAR(60),
+  status        VARCHAR(12) NOT NULL DEFAULT 'PENDING',      -- PENDING | DONE | REJECTED
+  diproses_oleh VARCHAR(30),
+  diproses_at   DATETIME NULL,
+  created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_rst_nik (nik, status),
+  KEY idx_rst_status (status, created_at)
+);

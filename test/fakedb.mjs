@@ -17,6 +17,21 @@ export function fakeDb(users = [], extra = {}) {
     async query(sql, a = []) {
       st.log.push({ sql, a });
       const s = sql.replace(/\s+/g, ' ').trim();
+      // --- pendaftaran & reset (tahap 1d) ---
+      const R = st.regs || (st.regs = []), Q = st.resets || (st.resets = []);
+      if (/FROM registrations WHERE nik = \? ORDER BY id DESC LIMIT 1/.test(s)) { const l = R.filter((r) => r.nik === a[0]); return l.length ? [l[l.length - 1]] : []; }
+      if (/^SELECT 1 FROM registrations WHERE nik = \? AND status = 'PENDING'/.test(s)) return R.some((r) => r.nik === a[0] && r.status === 'PENDING') ? [{ 1: 1 }] : [];
+      if (/^SELECT COUNT\(\*\) AS n FROM registrations WHERE status = 'PENDING'/.test(s)) return [{ n: R.filter((r) => r.status === 'PENDING').length }];
+      if (/^SELECT 1 FROM users WHERE nik = \? AND aktif = 1/.test(s)) { const u = U(a[0]); return u && Number(u.aktif) === 1 ? [{ 1: 1 }] : []; }
+      if (/^SELECT 1 FROM reset_requests WHERE nik = \? AND status = 'PENDING'/.test(s)) return Q.some((r) => r.nik === a[0] && r.status === 'PENDING') ? [{ 1: 1 }] : [];
+      if (/^SELECT \(SELECT COUNT\(\*\) FROM registrations/.test(s)) {
+        if (st.failCounts) throw new Error("Table 'registrations' doesn't exist");
+        return [{ reg: R.filter((r) => r.status === 'PENDING').length, rst: Q.filter((r) => r.status === 'PENDING').length }];
+      }
+      if (/^SELECT id, nik, nama, jabatan_diminta/.test(s)) return R.filter((r) => r.status === 'PENDING');
+      if (/FROM reset_requests r LEFT JOIN users u/.test(s)) return Q.filter((r) => r.status === 'PENDING').map((r) => ({ ...r, nama: (U(r.nik) || {}).nama, jabatan: (U(r.nik) || {}).jabatan }));
+      if (/^SELECT id, nik, nama, pw_hash, pw_salt, pw_iter, status FROM registrations WHERE id/.test(s)) return R.filter((r) => r.id === a[0]);
+      if (/^SELECT id, nik, status FROM reset_requests WHERE id/.test(s)) return Q.filter((r) => r.id === a[0]);
       if (/FROM users WHERE nik = \? LIMIT 1/.test(s) && s.includes('is_locked')) {
         const u = U(a[0]); return u ? [{ ...u, is_locked: u.locked ? 1 : 0 }] : [];
       }
@@ -47,6 +62,16 @@ export function fakeDb(users = [], extra = {}) {
       if (/^DELETE FROM sessions WHERE token_hash = \?/.test(s)) { st.sessions.delete(a[0]); return; }
       if (/^UPDATE users SET pw_hash = \?, pw_salt = \?, pw_iter = \?, must_change = 0/.test(s)) { Object.assign(U(a[3]), { pw_hash: a[0], pw_salt: a[1], pw_iter: a[2], must_change: 0 }); return; }
       if (/^UPDATE users SET pw_hash = \?, pw_salt = \?, pw_iter = \?, must_change = 1/.test(s)) { Object.assign(U(a[3]), { pw_hash: a[0], pw_salt: a[1], pw_iter: a[2], must_change: 1, failed_count: 0, locked: false }); return; }
+      // --- pendaftaran & reset (tahap 1d) ---
+      const R = st.regs || (st.regs = []), Q = st.resets || (st.resets = []);
+      if (/^INSERT INTO registrations/.test(s)) { R.push({ id: R.length + 1, nik: a[0], nama: a[1], jabatan_diminta: a[2], area_diminta: a[3], kontak: a[4], pw_hash: a[5], pw_salt: a[6], pw_iter: a[7], status: 'PENDING', catatan: null, created_at: 'now' }); return; }
+      if (/^INSERT INTO reset_requests/.test(s)) { Q.push({ id: Q.length + 1, nik: a[0], kontak: a[1], status: 'PENDING', created_at: 'now' }); return; }
+      if (/^INSERT INTO users .*must_change, pw_changed_at/.test(s)) {
+        st.users.set(a[0], { nik: a[0], nama: a[1], jabatan: a[2], bam_scope: a[3], aktif: 1, pw_hash: a[4], pw_salt: a[5], pw_iter: a[6], must_change: 0, failed_count: 0, locked: false }); return;
+      }
+      if (/^UPDATE registrations SET status = 'APPROVED'/.test(s)) { R.find((r) => r.id === a[1]).status = 'APPROVED'; return; }
+      if (/^UPDATE registrations SET status = 'REJECTED', catatan = \?/.test(s)) { const r = R.find((r) => r.id === a[2]); r.status = 'REJECTED'; r.catatan = a[0]; return; }
+      if ((m = s.match(/^UPDATE reset_requests SET status = '(DONE|REJECTED)'/))) { Q.find((r) => r.id === a[1]).status = m[1]; return; }
       if (/^INSERT INTO users/.test(s)) {
         st.users.set(a[0], { nik: a[0], nama: a[1], jabatan: a[2], bam_scope: a[3], aktif: 1, pw_hash: a[4], pw_salt: a[5], pw_iter: a[6], must_change: 1, failed_count: 0, locked: false }); return;
       }
