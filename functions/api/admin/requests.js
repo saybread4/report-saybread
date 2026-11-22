@@ -6,7 +6,7 @@
 //   POST {action:'dismiss', id}                      abaikan permintaan reset
 import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
-import { requireUser, audit, JABATAN, LABEL, normScope } from '../../_lib/auth.js';
+import { requireUser, audit, JABATAN, LABEL, normScope, isUtama, isFullRole } from '../../_lib/auth.js';
 import { hashPassword, tempPassword, iterFrom } from '../../_lib/security.js';
 
 async function bamList(db) {
@@ -15,7 +15,7 @@ async function bamList(db) {
 }
 
 export async function handleGet({ request }, db) {
-  await requireUser(db, request, { need: 'pusat' });
+  const me = await requireUser(db, request, { need: 'pusat' });
   const regs = await db.query(
     "SELECT id, nik, nama, jabatan_diminta, area_diminta, kontak, created_at FROM registrations WHERE status = 'PENDING' ORDER BY id");
   const rst = await db.query(
@@ -25,7 +25,7 @@ export async function handleGet({ request }, db) {
       label_diminta: LABEL[r.jabatan_diminta] || r.jabatan_diminta, area_diminta: r.area_diminta, kontak: r.kontak || '', created_at: r.created_at || null })),
     resets: rst.map((r) => ({ id: Number(r.id), nik: r.nik, nama: r.nama || '', label: LABEL[r.jabatan] || '', kontak: r.kontak || '', created_at: r.created_at || null })),
     bamList: await bamList(db),
-    jabatan: JABATAN.map((k) => ({ key: k, label: LABEL[k] })),
+    jabatan: JABATAN.filter((k) => isUtama(me) || k !== 'ADMIN_PUSAT').map((k) => ({ key: k, label: LABEL[k] })),
   });
 }
 
@@ -51,8 +51,9 @@ export async function handlePost({ request, env }, db) {
     }
 
     if (!JABATAN.includes(b.jabatan)) throw new HttpError(400, 'Tentukan jabatan yang benar.');
+    if (b.jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw new HttpError(403, 'Tidak diizinkan.', 'FORBIDDEN');
     let scope = null;
-    if (b.jabatan !== 'ADMIN_PUSAT') {
+    if (!isFullRole(b.jabatan)) {
       scope = normScope(b.bam_scope);
       if (!scope.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');
     }
@@ -82,6 +83,7 @@ export async function handlePost({ request, env }, db) {
       await db.exec("UPDATE reset_requests SET status = 'REJECTED', diproses_oleh = ?, diproses_at = UTC_TIMESTAMP() WHERE id = ?", [me.nik, id]);
       throw new HttpError(404, 'Pengguna tidak ditemukan atau sudah nonaktif; permintaan ditutup.');
     }
+    if (u[0].jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw new HttpError(403, 'Tidak diizinkan.', 'FORBIDDEN');
     const pw = tempPassword();
     const h = await hashPassword(pw, undefined, iterFrom(env));
     await db.exec(

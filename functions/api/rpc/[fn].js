@@ -13,6 +13,8 @@ export async function handle({ request, env, params }, db) {
   const fn = String(raw || '').toLowerCase().replace(/^api_/, '');
   const h = Object.prototype.hasOwnProperty.call(handlers, fn) ? handlers[fn] : null;
   if (!h) throw new HttpError(404, `Fungsi '${fn}' belum tersedia.`, 'NOT_FOUND');
+  // Fungsi khusus Admin Utama dibuat tampak "tidak ada" bagi jabatan lain (tidak membocorkan keberadaannya).
+  if (h.need === 'utama' && !can(user, 'utama')) throw new HttpError(404, `Fungsi '${fn}' belum tersedia.`, 'NOT_FOUND');
   if (!can(user, h.need || 'view')) throw new HttpError(403, 'Anda tidak punya akses untuk ini.', 'FORBIDDEN');
   const body = await readJson(request);
   const a = Array.isArray(body.a) ? body.a : [];

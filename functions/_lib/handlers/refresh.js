@@ -1,6 +1,7 @@
 // Isi ulang tabel ringkasan mv_* dari data mentah (pengganti `refresh materialized view` di Supabase).
 // Dipanggil bertahap oleh tombol Refresh: langkah 0..6, satu langkah per permintaan (menghindari batas waktu).
 import { num } from '../util.js';
+import { touchUpdated } from '../dataupdates.js';
 
 const NORMSQL = (c) => `UPPER(REGEXP_REPLACE(COALESCE(${c}, ''), '[^A-Za-z0-9]', ''))`;
 const NZ = (c) => `COALESCE(NULLIF(NULLIF(TRIM(${c}), ''), '0'), '')`;
@@ -116,6 +117,7 @@ export const refreshHandlers = {
     async run({ db }, a) {
       const s = Number.parseInt(a[1], 10);
       await refreshStep(db, s);
+      if (s === STEPS - 1) await touchUpdated(db, 'refresh');   // langkah terakhir selesai
       return { langkah: s, total: STEPS, pesan: 'Ringkasan diperbarui ' + stamp() };
     },
   },

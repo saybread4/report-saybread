@@ -11,6 +11,7 @@ import { isPusat } from '../auth.js';
 import { bamWhere, kodeWhere } from '../scope.js';
 import { fixKode, norm } from '../util.js';
 import { ymd, chunks } from '../ks.js';
+import { touchUpdated } from '../dataupdates.js';
 
 const q = (c) => '`' + c + '`';          // hanya dipakai untuk nama tabel/kolom dari daftar putih di bawah
 const ph = (n) => Array(n).fill('?').join(',');
@@ -184,7 +185,7 @@ async function adminDelete(db, user, a) {
   // hitung dulu (maksimal mx), baru hapus mx baris — jumlah terhapus tidak diambil dari "rows affected"
   const c = await db.query(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM ${q(t)} ${wh.sql} LIMIT ${mx}) x`, wh.params);
   const n = Number(c[0].n) || 0;
-  if (n > 0) await db.exec(`DELETE FROM ${q(t)} ${wh.sql} LIMIT ${mx}`, wh.params);
+  if (n > 0) { await db.exec(`DELETE FROM ${q(t)} ${wh.sql} LIMIT ${mx}`, wh.params); await touchUpdated(db, t); }
   return { terhapus: n, lagi: n >= mx };
 }
 
@@ -210,7 +211,7 @@ async function adminDeleteRow(db, user, a) {
   const w = pkWhere(cfg, vals, user, t);
   const c = await db.query(`SELECT COUNT(*) AS n FROM ${q(t)} WHERE ${w.sql}`, w.params);
   const n = Number(c[0].n) || 0;
-  if (n > 0) await db.exec(`DELETE FROM ${q(t)} WHERE ${w.sql}`, w.params);
+  if (n > 0) { await db.exec(`DELETE FROM ${q(t)} WHERE ${w.sql}`, w.params); await touchUpdated(db, t); }
   return { n };
 }
 
@@ -230,7 +231,7 @@ async function adminUpdate(db, user, a) {
   const set = [], args = [];
   for (const c of keys) {
     let v = coerce(cfg, c, ch[c], '');
-    if (c === 'kode' && v != null) v = fixKode(v);
+    if (c === 'kode' && v != null) v = String(fixKode(v)).trim();
     if (v == null && (cfg.zero || []).includes(c)) v = 0;
     set.push(`${q(c)} = ?`); args.push(v);
   }
@@ -256,6 +257,7 @@ async function adminUpdate(db, user, a) {
     if (/duplicate entry|\b1062\b/i.test(String(e && e.message))) throw new HttpError(409, 'Data dengan kunci yang sama sudah ada.', 'DUP');
     throw e;
   }
+  await touchUpdated(db, t);
   return { n: 1 };
 }
 
@@ -267,7 +269,7 @@ function prepRows(cfg, rows, pc) {
     const o = {};
     for (const c of pc) {
       let v = coerce(cfg, c, r[c], label);
-      if (c === 'kode' && v != null) v = fixKode(v);
+      if (c === 'kode' && v != null) v = String(fixKode(v)).trim();
       if (v == null && (cfg.zero || []).includes(c)) v = 0;
       o[c] = v;
     }
@@ -356,6 +358,7 @@ async function adminImport(db, user, a) {
     const upd = pc.filter((c) => !cfg.nk.includes(c)).map((c) => `${q(c)} = VALUES(${q(c)})`);
     const tail = ' ON DUPLICATE KEY UPDATE ' + (upd.length ? upd.join(', ') : `${q(cfg.nk[0])} = ${q(cfg.nk[0])}`);
     for (const part of chunks(rows, perStmt)) await db.exec(insertSql(part.length, tail), flat(part));
+    await touchUpdated(db, t);
     return { masuk: rows.length, baru: rows.length - ada, ubah: ada };
   }
 
@@ -373,6 +376,7 @@ async function adminImport(db, user, a) {
     }
   }
   for (const part of chunks(rows, perStmt)) await db.exec(insertSql(part.length), flat(part));
+  await touchUpdated(db, t);
   const ubah = Math.min(hapus, rows.length);
   const baru = Math.max(rows.length - hapus, 0);
   return { masuk: baru + ubah, baru, ubah };
@@ -488,7 +492,7 @@ export const adminHandlers = {
   admindelete:    { need: 'edit',  run: ({ db, user }, a) => adminDelete(db, user, a) },
   adminimport:    { need: 'edit',  run: ({ db, user }, a) => adminImport(db, user, a) },
   savebudovr:     { need: 'edit',  run: ({ db, user }, a) => saveBudOvr(db, user, a) },
-  saverankovr:    { need: 'pusat', run: ({ db }, a) => saveRankOvr(db, a) },
+  saverankovr:    { need: 'utama', run: ({ db }, a) => saveRankOvr(db, a) },
   getgemparlist:  { need: 'pusat', run: ({ db }) => gemparDates(db) },
   savegempar:     { need: 'pusat', run: ({ db }, a) => saveGempar(db, a) },
   deletegempar:   { need: 'pusat', run: ({ db }, a) => deleteGempar(db, a) },

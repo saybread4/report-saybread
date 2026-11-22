@@ -73,7 +73,7 @@ test('getmeta + getrows: indeks disusun ulang dan konsisten setelah disaring are
     { kode: 'T2', deskripsi: 'Roti B', cab: 'C2', bas: 'B1', as_: 'S1', tk: '["T2","Toko 2","AM","BT"]', jn: 'DOUGH', qty: 1, qpd: 0, md: 'Aktif', i_cab: 2, i_bas: 0, i_as: 0, i_tk: 2, i_ds: 1, i_jn: 0, i_md: 0 },
   ];
   const routes = [
-    [/FROM mv_stock_idx/, IDX], [/^SELECT kode FROM toko WHERE/, TOKO],
+    [/FROM mv_stock_idx/, IDX], [/^SELECT kode FROM toko WHERE/, TOKO], [/^SELECT kode, toko, bas, bastr/, []],
     [/MAX\(created_at\)/, [{ u: '2026-11-21 02:30:00', t: '2026-11-21' }]],
     [/MAX\(tanggal\) AS m FROM sales_toko/, [{ m: '2026-11-20' }]],
   ];

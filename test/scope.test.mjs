@@ -38,12 +38,23 @@ test('Nama BAM berisi kutip tetap aman karena parameter', () => {
 });
 
 test('matriks hak akses per jabatan', () => {
-  const m = (j) => ({ view: can({ jabatan: j }, 'view'), edit: can({ jabatan: j }, 'edit'), pusat: can({ jabatan: j }, 'pusat') });
-  assert.deepEqual(m('ADMIN_PUSAT'), { view: true, edit: true, pusat: true });
-  assert.deepEqual(m('ADMIN_KOORBAM'), { view: true, edit: true, pusat: false });
-  for (const j of ['KOORBAM', 'BAM', 'BAS', 'BASTR']) assert.deepEqual(m(j), { view: true, edit: false, pusat: false });
-  assert.deepEqual(m('TAMU'), { view: false, edit: false, pusat: false });   // jabatan tak dikenal ditolak
-  assert.equal(JABATAN.length, 6);
+  const m = (j) => ({ view: can({ jabatan: j }, 'view'), edit: can({ jabatan: j }, 'edit'), pusat: can({ jabatan: j }, 'pusat'), utama: can({ jabatan: j }, 'utama') });
+  assert.deepEqual(m('ADMIN_PUSAT'), { view: true, edit: true, pusat: true, utama: true });      // Admin Utama
+  assert.deepEqual(m('ADMINISTRATOR'), { view: true, edit: true, pusat: true, utama: false });   // sama, kecuali hal khusus Admin Utama
+  assert.deepEqual(m('ADMIN_KOORBAM'), { view: true, edit: true, pusat: false, utama: false });
+  for (const j of ['KOORBAM', 'BAM', 'BAS', 'BASTR']) assert.deepEqual(m(j), { view: true, edit: false, pusat: false, utama: false });
+  assert.deepEqual(m('TAMU'), { view: false, edit: false, pusat: false, utama: false });   // jabatan tak dikenal ditolak
+  assert.equal(JABATAN.length, 7);
+});
+
+test('Administrator melihat semua area seperti Admin Utama; label Admin Utama', () => {
+  const adm = { jabatan: 'ADMINISTRATOR', bam_scope: ['BAM A'] };            // scope di data diabaikan: akses penuh
+  assert.deepEqual(bamWhere(adm), { sql: '1=1', params: [] });
+  assert.deepEqual(kodeWhere(adm), { sql: '1=1', params: [] });
+  const p = publicUser({ nik: 'SAYBREAD', nama: 'Administrator', jabatan: 'ADMINISTRATOR', bam_scope: '["X"]', must_change: 0 });
+  assert.deepEqual([p.bam_scope, p.label, p.can], [null, 'Administrator', { edit: true, users: true, all: true, rank: false }]);
+  const u = publicUser({ nik: '1', nama: 'n', jabatan: 'ADMIN_PUSAT', bam_scope: null, must_change: 0 });
+  assert.deepEqual([u.label, u.can.rank], ['Admin Utama', true]);
 });
 
 test('parseScope / normScope / normNik / publicUser', () => {

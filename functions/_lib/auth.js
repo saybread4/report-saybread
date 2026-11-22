@@ -2,30 +2,39 @@
 import { HttpError, getCookie, SESSION_COOKIE } from './http.js';
 import { randomHex, sha256Hex } from './security.js';
 
-export const SESSION_HOURS = 12;
+export const SESSION_HOURS = 12;          // sesi biasa (cookie berakhir saat browser ditutup)
+export const REMEMBER_HOURS = 24 * 30;    // "Ingat saya": 30 hari
 export const MAX_FAILED = 5;       // salah password berturut-turut sebelum akun dikunci
 export const LOCK_MINUTES = 15;
 
 // ---- Jabatan --------------------------------------------------------------
-export const JABATAN = ['ADMIN_PUSAT', 'ADMIN_KOORBAM', 'KOORBAM', 'BAM', 'BAS', 'BASTR'];
+export const JABATAN = ['ADMIN_PUSAT', 'ADMINISTRATOR', 'ADMIN_KOORBAM', 'KOORBAM', 'BAM', 'BAS', 'BASTR'];
 export const LABEL = {
-  ADMIN_PUSAT: 'Admin Pusat',
+  ADMIN_PUSAT: 'Admin Utama',
+  ADMINISTRATOR: 'Administrator',
   ADMIN_KOORBAM: 'Admin Koorbam',
   KOORBAM: 'Koorbam',
   BAM: 'BAM',
   BAS: 'BAS',
   BASTR: 'BASTR',
 };
-const EDIT_ROLES = new Set(['ADMIN_PUSAT', 'ADMIN_KOORBAM']);
+const EDIT_ROLES = new Set(['ADMIN_PUSAT', 'ADMINISTRATOR', 'ADMIN_KOORBAM']);
+const FULL_ROLES = new Set(['ADMIN_PUSAT', 'ADMINISTRATOR']);
 
-export const isPusat = (u) => u.jabatan === 'ADMIN_PUSAT';
+// Akses penuh: melihat semua area, mengubah semua data, dan mengelola pengguna.
+// Berlaku untuk Admin Utama DAN Administrator.
+export const isPusat = (u) => FULL_ROLES.has(u.jabatan);
+export const isFullRole = (jabatan) => FULL_ROLES.has(jabatan);
+// Hanya Admin Utama (mis. mengubah Rank BAS, membuat/mengubah akun Admin Utama).
+export const isUtama = (u) => u.jabatan === 'ADMIN_PUSAT';
 
-// need: 'view' (semua jabatan) | 'edit' (admin) | 'pusat' (Admin Pusat saja)
+// need: 'view' (semua jabatan) | 'edit' (admin) | 'pusat' (akses penuh) | 'utama' (Admin Utama saja)
 export function can(u, need) {
   if (!JABATAN.includes(u.jabatan)) return false;
   if (need === 'view') return true;
   if (need === 'edit') return EDIT_ROLES.has(u.jabatan);
   if (need === 'pusat') return isPusat(u);
+  if (need === 'utama') return isUtama(u);
   return false;
 }
 
@@ -57,16 +66,16 @@ export function publicUser(u) {
     label: LABEL[u.jabatan] || u.jabatan,
     bam_scope: pusat ? null : parseScope(u.bam_scope),   // null = semua BAM
     must_change: Number(u.must_change) === 1,
-    can: { edit: can(u, 'edit'), users: can(u, 'pusat'), all: pusat },
+    can: { edit: can(u, 'edit'), users: can(u, 'pusat'), all: pusat, rank: isUtama(u) },
   };
 }
 
 // ---- Sesi -----------------------------------------------------------------
-export async function startSession(db, nik) {
+export async function startSession(db, nik, hours = SESSION_HOURS) {
   const token = randomHex(32);
   await db.exec(
     'INSERT INTO sessions (token_hash, nik, expires_at) VALUES (?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? HOUR))',
-    [await sha256Hex(token), nik, SESSION_HOURS]);
+    [await sha256Hex(token), nik, hours]);
   return token;
 }
 

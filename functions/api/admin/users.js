@@ -5,12 +5,12 @@
 //   POST /api/admin/users {action:'reset',  nik}            password sementara (tampil satu kali)
 import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
-import { requireUser, audit, JABATAN, LABEL, normNik, normScope, parseScope } from '../../_lib/auth.js';
+import { requireUser, audit, JABATAN, LABEL, normNik, normScope, parseScope, isUtama, isFullRole } from '../../_lib/auth.js';
 import { hashPassword, tempPassword, checkPasswordPolicy, iterFrom } from '../../_lib/security.js';
 
 const row = (r) => ({
   nik: r.nik, nama: r.nama, jabatan: r.jabatan, label: LABEL[r.jabatan] || r.jabatan,
-  bam_scope: r.jabatan === 'ADMIN_PUSAT' ? null : parseScope(r.bam_scope),
+  bam_scope: isFullRole(r.jabatan) ? null : parseScope(r.bam_scope),
   aktif: Number(r.aktif) === 1, must_change: Number(r.must_change) === 1,
   last_login: r.last_login || null, pw_changed_at: r.pw_changed_at || null, created_at: r.created_at || null,
 });
@@ -28,20 +28,24 @@ async function unknownBam(db, scope) {
 }
 
 function scopeFor(jabatan, input) {
-  if (jabatan === 'ADMIN_PUSAT') return null;
+  if (isFullRole(jabatan)) return null;
   const s = normScope(input);
   if (!s.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');
   return s;
 }
 
+// Hanya Admin Utama yang boleh memberi/mengubah jabatan Admin Utama. Pembatasan ini sengaja tidak dijelaskan
+// kepada Administrator (pesan umum saja), supaya batas akses Administrator tidak mudah dilewati.
+const FORBID = () => new HttpError(403, 'Tidak diizinkan.', 'FORBIDDEN');
+
 export async function handleGet({ request }, db) {
-  await requireUser(db, request, { need: 'pusat' });
+  const me = await requireUser(db, request, { need: 'pusat' });
   const users = await db.query(
     'SELECT nik, nama, jabatan, bam_scope, aktif, must_change, last_login, pw_changed_at, created_at FROM users ORDER BY jabatan, nama');
   return json({
     users: users.map(row),
     bamList: await bamList(db),
-    jabatan: JABATAN.map((k) => ({ key: k, label: LABEL[k] })),
+    jabatan: JABATAN.filter((k) => isUtama(me) || k !== 'ADMIN_PUSAT').map((k) => ({ key: k, label: LABEL[k] })),
   });
 }
 
@@ -56,6 +60,7 @@ export async function handlePost({ request, env }, db) {
     const nama = String(b.nama || '').trim();
     if (!nama || nama.length > 150) throw new HttpError(400, 'Nama wajib diisi (maksimal 150 karakter).');
     if (!JABATAN.includes(b.jabatan)) throw new HttpError(400, 'Jabatan tidak dikenal.');
+    if (b.jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw FORBID();
     const scope = scopeFor(b.jabatan, b.bam_scope);
     if ((await db.query('SELECT 1 FROM users WHERE nik = ? LIMIT 1', [nik])).length)
       throw new HttpError(409, 'NIK itu sudah terdaftar.', 'DUP');
@@ -78,6 +83,7 @@ export async function handlePost({ request, env }, db) {
   const found = await db.query('SELECT nik, jabatan, aktif FROM users WHERE nik = ? LIMIT 1', [nik]);
   if (!found.length) throw new HttpError(404, 'Pengguna tidak ditemukan.');
   const target = found[0];
+  if (target.jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw FORBID();   // Administrator tidak boleh menyentuh akun Admin Utama
 
   if (b.action === 'update') {
     const sets = [], args = [];
@@ -90,6 +96,7 @@ export async function handlePost({ request, env }, db) {
     const jab = b.jabatan !== undefined ? b.jabatan : target.jabatan;
     if (b.jabatan !== undefined) {
       if (!JABATAN.includes(b.jabatan)) throw new HttpError(400, 'Jabatan tidak dikenal.');
+      if (b.jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw FORBID();
       sets.push('jabatan = ?'); args.push(b.jabatan);
     }
     if (b.jabatan !== undefined || b.bam_scope !== undefined) {
@@ -100,7 +107,7 @@ export async function handlePost({ request, env }, db) {
     if (b.aktif !== undefined) { sets.push('aktif = ?'); args.push(b.aktif ? 1 : 0); }
     if (!sets.length) return json({ ok: true, changed: 0 });
 
-    if (nik === me.nik && ((b.aktif !== undefined && !b.aktif) || jab !== 'ADMIN_PUSAT'))
+    if (nik === me.nik && ((b.aktif !== undefined && !b.aktif) || !isFullRole(jab)))
       throw new HttpError(400, 'Anda tidak bisa menonaktifkan atau menurunkan jabatan akun sendiri.', 'SELF');
 
     await db.exec(`UPDATE users SET ${sets.join(', ')} WHERE nik = ?`, [...args, nik]);

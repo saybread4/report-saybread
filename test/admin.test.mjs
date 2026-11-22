@@ -28,13 +28,14 @@ test('fixKode: bentuk tanggal dikembalikan ke kode, kode normal tidak berubah', 
     assert.equal(fixKode(i), o);
 });
 
-test('hak akses: hanya Admin Pusat dan Admin Koorbam yang boleh fungsi admin; Gempar/rank hanya Pusat', () => {
+test('hak akses: admin data = Admin Utama/Administrator/Admin Koorbam; Gempar = akses penuh; Rank BAS = Admin Utama saja', () => {
   const need = Object.fromEntries(Object.entries(adminHandlers).map(([k, h]) => [k, h.need]));
   assert.equal(need.adminimport, 'edit'); assert.equal(need.savebudovr, 'edit');
-  for (const k of ['saverankovr', 'gemparsave', 'gempardelete', 'gemparlist', 'savegempar', 'deletegempar', 'getgemparlist']) assert.equal(need[k], 'pusat', k);
-  for (const j of ['KOORBAM', 'BAM', 'BAS', 'BASTR'])
-    for (const [k, n] of Object.entries(need)) assert.equal(can({ jabatan: j }, n), false, `${j} ${k}`);
-  for (const [k, n] of Object.entries(need)) assert.equal(can({ jabatan: 'ADMIN_KOORBAM' }, n), n === 'edit', k);
+  assert.equal(need.saverankovr, 'utama');
+  for (const k of ['gemparsave', 'gempardelete', 'gemparlist', 'savegempar', 'deletegempar', 'getgemparlist']) assert.equal(need[k], 'pusat', k);
+  const roles = { ADMIN_PUSAT: [1, 1, 1], ADMINISTRATOR: [1, 1, 0], ADMIN_KOORBAM: [1, 0, 0], KOORBAM: [0, 0, 0], BAM: [0, 0, 0], BAS: [0, 0, 0], BASTR: [0, 0, 0] };
+  for (const [j, [edit, pusat, utama]] of Object.entries(roles))
+    for (const [k, n] of Object.entries(need)) assert.equal(can({ jabatan: j }, n), !!{ edit, pusat, utama }[n], `${j} ${k}`);
   for (const k of Object.keys(adminHandlers)) assert.ok(handlers[k], 'terdaftar di router: ' + k);
 });
 
@@ -193,7 +194,8 @@ test('adminimport (tanpa kunci unik): hapus kunci lama lalu isi; mode Ganti mele
   assert.deepEqual(db.execs()[1].a, ['2026-01-05', 'T1', 'DOUGH', 6, '2026-01-05', 'T2', 'DOUGH', 7]);
   const g = mk(N(0));
   assert.deepEqual(await run('adminimport', pusat, ['t', 'stock_toko', rows, cols, true], g), { masuk: 2, baru: 2, ubah: 0 });
-  assert.equal(g.execs().length, 1); assert.equal(g.queries().length, 0);
+  assert.equal(g.execs().length, 2); assert.equal(g.queries().length, 0);   // INSERT + catatan data_updates
+  assert.match(g.execs()[1].sql, /INSERT INTO data_updates/); assert.deepEqual(g.execs()[1].a, ['stock_toko']);
 });
 
 test('adminimport budged: Koorbam hanya menghapus baris BAM-nya; kunci NULL aman', async () => {
@@ -216,7 +218,7 @@ test('adminimport: 2500 baris dipecah beberapa INSERT (maks ~10000 parameter)', 
   const db = mk(N(0));
   const r = await run('adminimport', pusat, ['t', 'sales_item', rows, ['ket', 'tahun', 'bulan', 'kode', 'deskripsi'], false], db);
   assert.equal(r.masuk, 2500);
-  assert.equal(db.execs().length, 2);                                              // 5 kolom -> 2000 baris per INSERT
+  assert.equal(db.execs().filter((e) => /^INSERT INTO `sales_item`/.test(e.sql)).length, 2);   // 5 kolom -> 2000 baris per INSERT
   assert.ok(db.execs().every((e) => e.a.length <= 10000));
 });
 
@@ -286,4 +288,22 @@ test('override rank: hanya kunci BAS| dan hanya Admin Pusat', async () => {
   assert.deepEqual(await run('saverankovr', pusat, ['t', 'BAS|a', 3], db), { 'BAS|a': 3 });
   assert.match(db.execs()[0].sql, /INSERT INTO rank_override/);
   assert.equal(can(koor, handlers.saverankovr.need), false);
+});
+
+test('data_updates: dicatat setelah impor/ubah/hapus berhasil; gagal mencatat tidak menggagalkan operasi', async () => {
+  const db = mk(N(1));
+  await run('adminimport', pusat, ['t', 'item', [{ plu: '1' }], ['plu'], false], db);
+  assert.deepEqual(db.execs().at(-1), { k: 'e', sql: db.execs().at(-1).sql, a: ['item'] });
+  assert.match(db.execs().at(-1).sql, /^INSERT INTO data_updates \(nama, updated_at\) VALUES \(\?, UTC_TIMESTAMP\(\)\) ON DUPLICATE KEY UPDATE updated_at = UTC_TIMESTAMP\(\)$/);
+  const tidak = mk(N(0));
+  await run('admindelete', pusat, ['t', 'stock', '', '', '', '', 5000, true], tidak);
+  assert.equal(tidak.execs().length, 0);                                           // tidak ada yang dihapus -> tidak dicatat
+  const rusak = mk(N(1), (s) => { if (/data_updates/.test(s)) throw new Error("Table 'data_updates' doesn't exist"); });
+  assert.deepEqual(await run('admindeleterow', pusat, ['t', 'toko', { kode: 'T1' }], rusak), { n: 1 });
+});
+
+test('kode diimpor tanpa spasi di awal/akhir', async () => {
+  const db = mk(N(0));
+  await run('adminimport', pusat, ['t', 'sales_toko', [{ tanggal: '2026-01-05', kode: '  G020  ', sales_qty: 1 }], ['tanggal', 'kode', 'sales_qty'], false], db);
+  assert.equal(db.execs()[0].a[1], 'G020');
 });

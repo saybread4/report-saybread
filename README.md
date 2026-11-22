@@ -1,7 +1,26 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
-Status: **tahap 1d — login langsung ke halaman utama, menu pengguna, daftar akun, dan reset password**. Semua fungsi data dari tahap 1c tetap ada.
-Tes otomatis (75 tes, database tiruan; SQL-nya belum pernah dijalankan di TiDB asli): `node --test "test/*.test.mjs"`.
+Status: **tahap 1e — Administrator, Ingat saya, daftar toko dari tabel toko, perbaikan "Diperbarui" dan data bulan berjalan di Rank**.
+Tes otomatis (96 tes; sebagian dijalankan terhadap SQLite sungguhan, bukan hanya tiruan): `node --test "test/*.test.mjs"`.
+
+## Tahap 1e — yang berubah
+**Jalankan `migrasi-1e.sql` di TiDB SEBELUM deploy** (tabel `data_updates` + akun Administrator). Tanpa itu, aplikasi tetap jalan,
+hanya chip "Diperbarui" kosong ("-") dan akun `saybread` belum ada.
+
+- **Login:** kolom "NIK / Username" dan kotak **Ingat saya** (sesi 30 hari, cookie menetap; tanpa centang: 12 jam, hilang saat browser ditutup).
+- **Daftar toko dari tabel `toko`:** filter KODE/TOKO (Perform Toko) serta BAS/BASTR/AM/AS (Monitor Area) tidak lagi menunggu data Stock.
+- **"Diperbarui":** dicatat di `data_updates` setiap impor/ubah/hapus data dan setiap Refresh. Data yang diunggah *sebelum* tahap ini belum
+  tercatat: tekan **Refresh** sekali (atau unggah data baru) agar waktunya muncul.
+- **Rank:** penjumlahan per cabang/PNL/BAS/BASTR/AM/AS kini dikerjakan di database (hanya ribuan baris ringkasan yang dikirim, bukan ratusan ribu baris
+  harian), dan toko dicocokkan lewat `norm(kode)` sehingga spasi/huruf berbeda pada kode tidak membuat baris bulan baru terlewat.
+  Kode toko juga dipangkas dari spasi saat diimpor. Bila SQL agregasi gagal, otomatis memakai cara lama.
+- Tombol "Admin" diganti **User**; judul menjadi **Performance Say Bread**; "Admin Pusat" menjadi **Admin Utama**.
+
+Bila bulan berjalan di Rank masih kosong, jalankan di SQL Editor TiDB untuk melihat apakah datanya ada di tabel ringkasan:
+```sql
+SELECT DATE_FORMAT(tanggal,'%Y-%m') AS bln, COUNT(*) AS baris, COUNT(DISTINCT tanggal) AS hari, SUM(qty) AS qty FROM mv_tgl GROUP BY 1 ORDER BY 1;
+SELECT DATE_FORMAT(tanggal,'%Y-%m') AS bln, COUNT(*) AS baris, COUNT(DISTINCT tanggal) AS hari, SUM(sales_qty) AS qty FROM sales_toko GROUP BY 1 ORDER BY 1;
+```
 
 ## Daftar akun & reset password (tahap 1d)
 
@@ -25,12 +44,18 @@ ada di menu pengguna (pojok kanan atas header). Chip cakupan di header tetap bis
 
 ## Hak akses
 
-| Jabatan        | Data yang terlihat        | Boleh ubah data         | Kelola pengguna |
-|----------------|---------------------------|-------------------------|-----------------|
-| Admin Pusat    | semua                     | semua tabel             | ya              |
-| Admin Koorbam  | BAM dalam areanya         | tabel data di areanya   | tidak           |
-| Koorbam        | BAM dalam areanya         | tidak                   | tidak           |
-| BAM / BAS / BASTR | BAM dalam areanya      | tidak                   | tidak           |
+| Jabatan | Data yang terlihat | Boleh ubah data | Kelola pengguna | Ubah Rank BAS |
+|---|---|---|---|---|
+| Admin Utama (`ADMIN_PUSAT`) | semua | semua tabel | ya | ya |
+| Administrator | semua | semua tabel | ya, kecuali akun Admin Utama | **tidak** (dibuat tidak terlihat) |
+| Admin Koorbam | BAM dalam areanya | tabel data di areanya | tidak | tidak |
+| Koorbam | BAM dalam areanya | tidak | tidak | tidak |
+| BAM / BAS / BASTR | BAM dalam areanya | tidak | tidak | tidak |
+
+Administrator: akun bawaan `saybread` / `saybread4321` dibuat oleh `migrasi-1e.sql` (**segera ganti password**).
+Pembatasan Rank BAS sengaja tidak dijelaskan di layar: kontrol edit tidak muncul, dan jika fungsinya dipanggil langsung, server menjawab
+seolah fungsi itu tidak ada. Administrator juga tidak bisa membuat, mengubah, atau mereset akun Admin Utama, atau menaikkan akun
+jadi Admin Utama (kalau bisa, pembatasan tadi mudah dilewati).
 
 "Area" = daftar BAM di kolom `users.bam_scope`, diisi Admin Pusat. Pembatasan dilakukan di server
 (`functions/_lib/scope.js`), bukan di browser. Area kosong = tidak ada data.

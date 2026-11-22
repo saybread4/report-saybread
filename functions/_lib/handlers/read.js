@@ -1,6 +1,8 @@
 // Fungsi baca yang dipindah dari Supabase (api_get*). Bentuk hasil SAMA dengan fungsi lama;
 // yang berbeda: pembatasan area dilakukan di server (scopedKs / allowedNorm), bukan token browser.
 import { isPusat } from '../auth.js';
+import { bamWhere } from '../scope.js';
+import { lastUpdated } from '../dataupdates.js';
 import { norm, nz, num } from '../util.js';
 import {
   arr, str, ymd, NORM, inList, rnd, chunks, allowedNorm, scopedKs, datesInfo, tglRows, overrides, tokoMap,
@@ -62,6 +64,90 @@ function dimMaps(rows) {
   return out;
 }
 
+// Toko dalam area pengguna, langsung dari tabel toko.
+async function tokoScoped(db, user) {
+  const w = bamWhere(user, 'bam');
+  return db.query(`SELECT kode, toko, bas, bastr, am, \`as\` AS as_, cabang FROM toko WHERE ${w.sql}`, w.params);
+}
+
+// Tambahkan toko dari tabel toko ke kamus d (cab/bas/as/tk) dan kembalikan satu baris per toko: [cab, bas, as, tk].
+// Toko yang sudah ada di kamus (lewat norm(kode)) memakai indeks yang sama; nilai baru ditambahkan di belakang.
+function storeRows(d, toko) {
+  const idx = (name) => {
+    const m = new Map();
+    d[name].forEach((v, i) => { const k = name === 'tk' ? norm(v[0]) : String(v); if (!m.has(k)) m.set(k, i); });
+    return (key, make) => {
+      let i = m.get(key);
+      if (i === undefined) { i = d[name].length; d[name].push(make()); m.set(key, i); }
+      return i;
+    };
+  };
+  const cab = idx('cab'), bas = idx('bas'), as = idx('as'), tk = idx('tk');
+  const out = [];
+  for (const t of toko) {
+    const k = norm(t.kode);
+    if (!k) continue;
+    const c = nz(t.cabang), b = nz(t.bas), a = nz(t.as_);
+    out.push([cab(c, () => c), bas(b, () => b), as(a, () => a), tk(k, () => [t.kode, nz(t.toko), nz(t.am), nz(t.bastr)])]);
+  }
+  return out;
+}
+
+// ---- Rank: penjumlahan per grup & tanggal ------------------------------------------------------
+// Dikerjakan di DATABASE (GROUP BY), jadi yang dikirim ke server hanya ribuan baris ringkasan, bukan ratusan ribu
+// baris harian. Toko dicocokkan lewat kode persis (mv_ks) dan atribut BAS/BASTR/AM/AS lewat norm(kode).
+const RANK_G = ['cab', 'pnl', 'bas', 'bastr', 'am', 'as'];
+const rankLabel = (c) => `CASE WHEN ${c} IS NULL OR TRIM(${c}) IN ('', '0') THEN '(kosong)' ELSE TRIM(${c}) END`;
+
+async function rankAggSql(db, user, G, names, dt, wantNorm) {
+  const where = [], params = [];
+  if (wantNorm) { where.push(`${NORM('k.cabang')} IN (${wantNorm.length ? wantNorm.map(() => '?').join(',') : "''"})`); params.push(...wantNorm); }
+  if (!isPusat(user)) {
+    const w = bamWhere(user, 'x.bam');
+    where.push(`${NORM('k.kode')} IN (SELECT ${NORM('x.kode')} FROM toko x WHERE ${w.sql})`);
+    params.push(...w.params);
+  }
+  const expr = { cab: rankLabel('k.cabang'), pnl: rankLabel('k.cabpnl'), bas: rankLabel('o.bas'), bastr: rankLabel('o.bastr'), am: rankLabel('o.am'), as: rankLabel('o.as_') };
+  const sql = (g) => `SELECT ${expr[g]} AS grp, t.tanggal AS tgl, SUM(t.qty) AS q, SUM(t.rp) AS rp, SUM(t.barp) AS b,
+        COUNT(*) AS n, SUM(CASE WHEN t.qty > 0 THEN 1 ELSE 0 END) AS nq
+      FROM mv_tgl t
+      JOIN mv_ks k ON k.kode = t.kode
+      LEFT JOIN (SELECT ${NORM('kode')} AS nk, MIN(bas) AS bas, MIN(bastr) AS bastr, MIN(am) AS am, MIN(\`as\`) AS as_
+                   FROM toko GROUP BY ${NORM('kode')}) o ON o.nk = ${NORM('k.kode')}
+     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+     GROUP BY grp, tgl`;
+  const agg = {};
+  await Promise.all(G.map(async (g) => {
+    const m = new Map();
+    for (const r of await db.query(sql(g), params)) {
+      const gi = names[g].get(r.grp), di = dt.di.get(ymd(r.tgl));
+      if (gi === undefined || di === undefined) continue;
+      m.set(gi * 100000 + di, [gi, di, num(r.q), num(r.rp), num(r.b), num(r.n), num(r.nq)]);
+    }
+    agg[g] = m;
+  }));
+  return agg;
+}
+
+// Cara lama (cadangan): ambil semua baris harian lalu jumlahkan di server. Toko dicocokkan lewat norm(kode),
+// sehingga spasi/huruf berbeda pada kode tidak membuat baris terlewat.
+async function rankAggJs(db, stores, G, names, dt) {
+  const byNorm = new Map(stores.map((s) => [norm(s.kode), s]));
+  const agg = {};
+  for (const g of G) agg[g] = new Map();
+  for (const v of await tglRows(db, stores.map((s) => s.kode), { cols: 'kode, tanggal, qty, rp, barp' })) {
+    const di = dt.di.get(ymd(v.tanggal)); if (di === undefined) continue;
+    const s = byNorm.get(norm(v.kode)); if (!s) continue;
+    for (const g of G) {
+      const gi = names[g].get(s.g[g]), key = gi * 100000 + di;
+      const x = agg[g].get(key) || [gi, di, 0, 0, 0, 0, 0];
+      x[2] += num(v.qty); x[3] += num(v.rp); x[4] += num(v.barp); x[5] += 1; if (num(v.qty) > 0) x[6] += 1;
+      agg[g].set(key, x);
+    }
+  }
+  return agg;
+}
+
 export const readHandlers = {
   // ---- Peta cabang / toko -----------------------------------------------------------------
   getcabmeta: {
@@ -85,19 +171,25 @@ export const readHandlers = {
   },
 
   // ---- Stock ------------------------------------------------------------------------------
+  // Kamus filter + daftar toko. Daftar toko diambil dari TABEL TOKO (bukan dari data stock), jadi filter
+  // Perform Toko / Monitor Area langsung terisi walau data stock belum diunggah. Isi kamus dari stock tetap
+  // di posisi semula; entri yang hanya ada di tabel toko ditambahkan di belakangnya, sehingga indeks baris
+  // dari getrows tidak berubah.
   getmeta: {
     need: 'view',
     async run({ db, user }) {
-      const rows = await stockScoped(db, user);
+      const [rows, toko] = await Promise.all([stockScoped(db, user), tokoScoped(db, user)]);
       const maps = dimMaps(rows);
+      const d = {};
+      for (const [name] of DIM) d[name] = [...maps[name].values];
+      const srows = storeRows(d, toko);
       const st = (await db.query('SELECT MAX(created_at) AS u, MAX(tanggal) AS t FROM stock'))[0] || {};
       const sb = await salesBulan(db);
-      const d = {};
-      for (const [name] of DIM) d[name] = maps[name].values;
       return {
-        updated: jakarta(st.u),
+        updated: jakarta((await lastUpdated(db)) || st.u),
         tgl: dmy(ymd(st.t)),
         d,
+        srows,
         defaults: { jenis: 'DOUGH' },
         qpd: { bulan: sb.bulan, nama: sb.bulan ? BULAN[sb.bulan - 1] : null, hari: sb.hari },
         warn: '',
@@ -375,18 +467,13 @@ export const readHandlers = {
         const list = [...minKi[g]].sort((p, q) => p[1] - q[1] || (p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : 0)).map((x) => x[0]);
         order[g] = list; list.forEach((n, i) => names[g].set(n, i));
       }
-      const byKode = new Map(stores.map((s) => [s.kode, s]));
-      const agg = {};
-      for (const g of G) agg[g] = new Map();
-      for (const v of await tglRows(db, stores.map((s) => s.kode), { cols: 'kode, tanggal, qty, rp, barp' })) {
-        const di = dt.di.get(ymd(v.tanggal)); if (di === undefined) continue;
-        const s = byKode.get(v.kode); if (!s) continue;
-        for (const g of G) {
-          const gi = names[g].get(s.g[g]), key = gi * 100000 + di;
-          const x = agg[g].get(key) || [gi, di, 0, 0, 0, 0, 0];
-          x[2] += num(v.qty); x[3] += num(v.rp); x[4] += num(v.barp); x[5] += 1; if (num(v.qty) > 0) x[6] += 1;
-          agg[g].set(key, x);
-        }
+      const wantNorm = allsc ? null : [...want];
+      let agg;
+      try {
+        agg = await rankAggSql(db, user, G, names, dt, wantNorm);
+      } catch (e) {                                   // jaga-jaga: bila SQL agregasi gagal, pakai cara lama (lebih berat)
+        console.error('agregasi Rank di database gagal, memakai cara lama', e);
+        agg = await rankAggJs(db, stores, G, names, dt);
       }
       const out = { dates: dt.list, warn: '', ovr: await overrides(db, 'rank_override') };
       for (const g of G) out[g] = { names: order[g], rows: [...agg[g].values()].sort((p, q) => p[0] - q[0] || p[1] - q[1]) };

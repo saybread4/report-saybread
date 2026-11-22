@@ -58,8 +58,9 @@ export function getCookie(request, name) {
   return null;
 }
 
+// maxAgeSec null = cookie sesi (hilang saat browser ditutup); angka = cookie menetap ("Ingat saya").
 export const setSessionCookie = (token, maxAgeSec) =>
-  `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSec}`;
+  `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict${maxAgeSec ? `; Max-Age=${maxAgeSec}` : ''}`;
 
 export const clearSessionCookie = () =>
   `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;

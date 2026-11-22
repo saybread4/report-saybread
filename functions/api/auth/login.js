@@ -2,7 +2,7 @@
 import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError, setSessionCookie } from '../../_lib/http.js';
 import { verifyPassword, DUMMY } from '../../_lib/security.js';
-import { startSession, audit, publicUser, normNik, SESSION_HOURS, MAX_FAILED, LOCK_MINUTES } from '../../_lib/auth.js';
+import { startSession, audit, publicUser, normNik, SESSION_HOURS, REMEMBER_HOURS, MAX_FAILED, LOCK_MINUTES } from '../../_lib/auth.js';
 
 export async function handle({ request }, db) {
   checkOrigin(request);
@@ -62,9 +62,11 @@ export async function handle({ request }, db) {
 
   await db.exec('UPDATE users SET failed_count = 0, locked_until = NULL, last_login = UTC_TIMESTAMP() WHERE nik = ?', [nik]);
   await db.exec('DELETE FROM sessions WHERE expires_at < UTC_TIMESTAMP()');
-  const token = await startSession(db, nik);
-  await audit(db, { nik, aksi: 'login_ok' });
-  return json({ ok: true, user: publicUser(u) }, 200, { 'Set-Cookie': setSessionCookie(token, SESSION_HOURS * 3600) });
+  const remember = body.remember === true;                  // "Ingat saya": sesi 30 hari, cookie menetap
+  const hours = remember ? REMEMBER_HOURS : SESSION_HOURS;
+  const token = await startSession(db, nik, hours);
+  await audit(db, { nik, aksi: 'login_ok', detail: remember ? 'ingat saya' : null });
+  return json({ ok: true, user: publicUser(u) }, 200, { 'Set-Cookie': setSessionCookie(token, remember ? hours * 3600 : null) });
 }
 
 export async function onRequestPost(ctx) {

@@ -51,7 +51,7 @@ test('getplu: PLU pertama per deskripsi, abaikan yang kosong dan berawalan #', a
 
 test('semua fungsi terdaftar bertipe hak akses yang sah', () => {
   for (const [k, h] of Object.entries(handlers)) {
-    assert.ok(['view', 'edit', 'pusat'].includes(h.need), k);
+    assert.ok(['view', 'edit', 'pusat', 'utama'].includes(h.need), k);
     assert.equal(typeof h.run, 'function', k);
   }
 });
