@@ -176,3 +176,76 @@ test('getmeta: tabel data_updates belum dimigrasi -> tidak error', async () => {
   const m = await handlers.getmeta.run({ db, user: users.pusat });
   assert.equal(m.updated, null);
 });
+
+// ---- Refresh: potongan per bulan / bagian kode harus menghasilkan isi yang SAMA dengan satu perintah penuh ----
+import { refreshStep } from '../functions/_lib/handlers/refresh.js';
+
+function refreshDb() {
+  const db = sqliteDb((raw) => {
+    raw.function('CRC32', (s) => { let c = ~0; for (const ch of Buffer.from(String(s))) { c ^= ch; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xEDB88320 : c >>> 1; } return (~c) >>> 0; });
+    raw.function('DATE_FORMAT', (d, f) => (f === '%Y-%m' ? String(d).slice(0, 7) : d));
+    raw.exec('DROP TABLE sales_toko');
+    raw.exec(`
+      CREATE TABLE sales_toko (tanggal TEXT, kode TEXT COLLATE RTRIM, produksi REAL, sales_qty INT, sales_rp INT, margin INT, ba_qty INT, ba_rp INT);
+      CREATE TABLE stock_toko (id INTEGER PRIMARY KEY, tanggal TEXT, kode TEXT, jenis TEXT, stock_total INT);
+      CREATE TABLE sales_item (ket TEXT, tahun INT, bulan INT, kode TEXT, deskripsi TEXT, produksi REAL, sales_qty INT, margin INT, sales_rp INT, ba_qty INT, ba_rp INT);
+      CREATE TABLE mv_mon_list (mk TEXT, y INT, b INT, hari INT, mi INT);
+      CREATE TABLE mv_mon_rows (kode TEXT, knorm TEXT, ds TEXT, mi INT, prod REAL, qty INT, rp REAL, baq INT, barp REAL);
+      CREATE TABLE mv_mon_same (kode TEXT, knorm TEXT, ds TEXT, mi INT, prod REAL, qty INT, rp REAL, baq INT, barp REAL);
+    `);
+    raw.exec('DROP TABLE mv_tgl'); raw.exec('CREATE TABLE mv_tgl (kode TEXT, tanggal TEXT, stock_qty INT, prod REAL, qty INT, rp INT, mg INT, baq INT, barp INT)');
+    const sale = [], stk = [], item = [];
+    const months = [['2026-10', 31], ['2026-11', 19], ['2026-12', 5], ['2027-01', 3]];
+    for (let i = 0; i < 40; i++) {
+      const kode = 'G' + String(100 + i) + (i % 9 === 0 ? ' ' : '');
+      for (const [ym, days] of months) {
+        for (let d = 1; d <= days; d += 6) {
+          const tg = `${ym}-${String(d).padStart(2, '0')}`;
+          sale.push({ tanggal: tg, kode, produksi: i + d, sales_qty: i, sales_rp: i * 100, margin: i, ba_qty: d % 2, ba_rp: d });
+          stk.push({ tanggal: tg, kode, jenis: i % 2 ? 'DOUGH' : 'Dough Beku', stock_total: 3 });
+          if (i % 5 === 0) stk.push({ tanggal: tg, kode, jenis: 'LAIN', stock_total: 99 });   // bukan DOUGH: harus diabaikan
+        }
+        for (const ket of ['closing', 'tgl_yang_sama']) for (const ds of ['Roti A', 'Roti B ', 'Roti C'])
+          item.push({ ket, tahun: Number(ym.slice(0, 4)), bulan: Number(ym.slice(5)), kode, deskripsi: ds, produksi: i, sales_qty: ds === 'Roti C' && i % 2 ? 0 : i + 1, margin: 1, sales_rp: ds === 'Roti C' && i % 2 ? 0 : i * 10, ba_qty: 0, ba_rp: 0 });
+      }
+    }
+    ins(raw, 'sales_toko', sale); ins(raw, 'stock_toko', stk); ins(raw, 'sales_item', item);
+    ins(raw, 'mv_mon_list', months.map(([ym], mi) => ({ mk: ym + '-01', y: Number(ym.slice(0, 4)), b: Number(ym.slice(5)), hari: 1, mi })));
+  });
+  db.run = async (step) => { let sub = 0, n = 0; do { const r = await refreshStep(db, step, sub); sub = r.next; n++; } while (sub != null); return n; };
+  const orig = db.exec; db.exec = async (sql, a = []) => orig(sql.replace(/^\s*TRUNCATE TABLE (\w+)/, 'DELETE FROM $1'), a);
+  return db;
+}
+const rowsOf = (db, sql) => db.raw.prepare(sql).all().map((r) => JSON.stringify(Object.values(r))).sort();
+
+test('refresh mv_tgl per bulan = gabungan penuh (stock DOUGH dijumlahkan, jenis lain diabaikan, lintas tahun)', async () => {
+  const db = refreshDb();
+  assert.equal(await db.run(3), 4);                                                            // 4 bulan = 4 potongan
+  const ref = rowsOf(db, `SELECT s.kode, s.tanggal, COALESCE(st.q, 0), s.produksi, s.sales_qty, s.sales_rp, s.margin, s.ba_qty, s.ba_rp
+      FROM sales_toko s LEFT JOIN (SELECT kode, tanggal, SUM(stock_total) AS q FROM stock_toko WHERE UPPER(jenis) LIKE 'DOUGH%' GROUP BY kode, tanggal) st
+        ON st.kode = s.kode AND st.tanggal = s.tanggal`);
+  const got = rowsOf(db, 'SELECT * FROM mv_tgl');
+  assert.equal(got.length, db.raw.prepare('SELECT COUNT(*) n FROM sales_toko').get().n);
+  assert.deepEqual(got, ref);
+  assert.equal(await db.run(3), 4);                                                            // diulang: tidak menggandakan baris
+  assert.deepEqual(rowsOf(db, 'SELECT * FROM mv_tgl'), ref);
+});
+
+for (const [step, tbl, ket] of [[4, 'mv_mon_rows', 'closing'], [5, 'mv_mon_same', 'tgl_yang_sama']]) {
+  test(`refresh ${tbl}: potongan per bulan x 4 bagian kode = satu perintah penuh; tiap kode ada di tepat satu bagian`, async () => {
+    const db = refreshDb();
+    assert.equal(await db.run(step), 16);                                                       // 4 bulan x 4 bagian
+    const having = step === 4 ? `HAVING COALESCE(SUM(i.produksi),0) <> 0 OR COALESCE(SUM(i.sales_qty),0) <> 0 OR COALESCE(SUM(i.sales_rp),0) <> 0 OR COALESCE(SUM(i.ba_qty),0) <> 0 OR COALESCE(SUM(i.ba_rp),0) <> 0` : '';
+    const ref = rowsOf(db, `SELECT i.kode, UPPER(REGEXP_REPLACE(COALESCE(i.kode,''),'[^A-Za-z0-9]','')), TRIM(i.deskripsi), mm.mi,
+        SUM(i.produksi), SUM(i.sales_qty), SUM(i.sales_rp), SUM(i.ba_qty), SUM(i.ba_rp)
+      FROM sales_item i JOIN mv_mon_list mm ON mm.y = i.tahun AND mm.b = i.bulan WHERE i.ket = '${ket}' GROUP BY i.kode, TRIM(i.deskripsi), mm.mi ${having}`);
+    const got = rowsOf(db, `SELECT * FROM ${tbl}`);
+    assert.ok(got.length > 100, 'harus ada isi');
+    assert.deepEqual(got, ref);
+    const dupe = db.raw.prepare(`SELECT COUNT(*) n FROM (SELECT kode, ds, mi FROM ${tbl} GROUP BY kode, ds, mi HAVING COUNT(*) > 1)`).get().n;
+    assert.equal(dupe, 0);                                                                      // tidak ada baris ganda antar-potongan
+    assert.equal(await db.run(step), 16);                                                       // diulang -> hasil tetap sama
+    assert.deepEqual(rowsOf(db, `SELECT * FROM ${tbl}`), ref);
+    if (step === 4) assert.ok(!got.some((r) => { const x = JSON.parse(r); return x[2] === 'Roti C' && x[4] === 0 && x[5] === 0 && x[6] === 0; }), 'baris semuanya nol harus dibuang (HAVING)');
+  });
+}

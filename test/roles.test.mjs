@@ -123,3 +123,14 @@ test('migrasi-1e.sql: akun bawaan saybread / saybread4321 benar-benar bisa masuk
   assert.deepEqual([j.user.jabatan, j.user.must_change, j.user.bam_scope], ['ADMINISTRATOR', false, null]);
   assert.equal((await doLogin(db, 'saybread', 'saybread4322')).status, 401);
 });
+
+test('Administrator tidak melihat akun Admin Utama (daftar pengguna & permintaan reset); Admin Utama melihat semuanya', async () => {
+  const { db, adm, utama } = await setup();
+  const names = async (c) => (await J(await run(users.handleGet, { request: req('/api/admin/users', { method: 'GET', cookie: c }), env }, db))).users.map((u) => u.nik).sort();
+  assert.deepEqual(await names(adm), ['B01', 'SAYBREAD']);                      // tanpa UTM (Admin Utama)
+  assert.deepEqual(await names(utama), ['B01', 'SAYBREAD', 'UTM']);
+  db.st.resets = [{ id: 1, nik: 'UTM', status: 'PENDING' }, { id: 2, nik: 'B01', status: 'PENDING' }];
+  const list = async (c) => (await J(await run(rq.handleGet, { request: req('/api/admin/requests', { method: 'GET', cookie: c }), env }, db))).resets.map((r) => r.nik);
+  assert.deepEqual(await list(adm), ['B01']);
+  assert.deepEqual(await list(utama), ['UTM', 'B01']);
+});

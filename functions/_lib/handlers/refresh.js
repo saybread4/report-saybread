@@ -1,21 +1,27 @@
 // Isi ulang tabel ringkasan mv_* dari data mentah (pengganti `refresh materialized view` di Supabase).
-// Dipanggil bertahap oleh tombol Refresh: langkah 0..6, satu langkah per permintaan (menghindari batas waktu).
+// Tabel ringkasan = hasil hitung yang disimpan di TiDB supaya halaman Rank/Perform/Monitor cepat dibuka.
+// Dipanggil bertahap oleh tombol "Perbarui Dashboard": 7 langkah besar, dan langkah yang berat (3, 4, 5) dipecah lagi
+// menjadi potongan kecil (per bulan, dan untuk 4-5 juga per bagian kode toko). Satu permintaan = satu perintah SQL yang
+// ukurannya terbatas, sehingga tidak melewati batas transaksi/memori/waktu TiDB.
 import { num } from '../util.js';
 import { touchUpdated } from '../dataupdates.js';
+import { HttpError } from '../http.js';
 
 const NORMSQL = (c) => `UPPER(REGEXP_REPLACE(COALESCE(${c}, ''), '[^A-Za-z0-9]', ''))`;
 const NZ = (c) => `COALESCE(NULLIF(NULLIF(TRIM(${c}), ''), '0'), '')`;
 const MONTH_START = (c) => `DATE_SUB(${c}, INTERVAL (DAYOFMONTH(${c}) - 1) DAY)`;
 
 export const STEPS = 7;
+export const STEP_NAMA = ['tanggal', 'daftar toko', 'daftar bulan', 'penjualan harian', 'penjualan item bulanan', 'penjualan item tanggal sama', 'stock'];
+const BUCKETS = 4;   // langkah 4 & 5: tiap bulan dibagi 4 bagian menurut kode toko (CRC32(kode) % 4)
 
-// Langkah 4 dan 5 dikerjakan per bulan (mi) supaya satu transaksi tidak terlalu besar.
+// Langkah 4 dan 5 dikerjakan per bulan (mi) DAN per bagian kode, supaya satu transaksi tidak terlalu besar.
 const monSql = (table, ket, having) => `
   INSERT INTO ${table} (kode, knorm, ds, mi, prod, qty, rp, baq, barp)
   SELECT i.kode, ${NORMSQL('i.kode')}, TRIM(i.deskripsi), mm.mi,
          SUM(i.produksi), SUM(i.sales_qty), SUM(i.sales_rp), SUM(i.ba_qty), SUM(i.ba_rp)
     FROM sales_item i JOIN mv_mon_list mm ON mm.y = i.tahun AND mm.b = i.bulan
-   WHERE i.ket = '${ket}' AND mm.mi = ?
+   WHERE i.ket = '${ket}' AND mm.mi = ? AND (CRC32(i.kode) % ${BUCKETS}) = ?
    GROUP BY i.kode, TRIM(i.deskripsi), mm.mi ${having}`;
 
 const HAVING_NONZERO = `HAVING COALESCE(SUM(i.produksi), 0) <> 0 OR COALESCE(SUM(i.sales_qty), 0) <> 0
@@ -47,12 +53,14 @@ export const SQL = {
            AND r.mk = DATE_SUB((SELECT MAX(${MONTH_START('tanggal')}) FROM sales_toko), INTERVAL (r.rn - 1) MONTH)
       ) s`,
 
-  tgl: `INSERT INTO mv_tgl (kode, tanggal, stock_qty, prod, qty, rp, mg, baq, barp)
+  // Penjualan harian per toko, dikerjakan per bulan: parameter = [awal, akhir(tidak termasuk), awal, akhir]
+  tglMonth: `INSERT INTO mv_tgl (kode, tanggal, stock_qty, prod, qty, rp, mg, baq, barp)
     SELECT s.kode, s.tanggal, COALESCE(st.q, 0), s.produksi, s.sales_qty, s.sales_rp, s.margin, s.ba_qty, s.ba_rp
       FROM sales_toko s
       LEFT JOIN (SELECT kode, tanggal, SUM(stock_total) AS q FROM stock_toko
-                  WHERE UPPER(jenis) LIKE 'DOUGH%' GROUP BY kode, tanggal) st
-        ON st.kode = s.kode AND st.tanggal = s.tanggal`,
+                  WHERE UPPER(jenis) LIKE 'DOUGH%' AND tanggal >= ? AND tanggal < ? GROUP BY kode, tanggal) st
+        ON st.kode = s.kode AND st.tanggal = s.tanggal
+     WHERE s.tanggal >= ? AND s.tanggal < ?`,
 
   monRows: monSql('mv_mon_rows', 'closing', HAVING_NONZERO),
   monSame: monSql('mv_mon_same', 'tgl_yang_sama', ''),
@@ -92,16 +100,38 @@ export const SQL = {
 
 const TABLES = ['mv_dates', 'mv_ks', 'mv_mon_list', 'mv_tgl', 'mv_mon_rows', 'mv_mon_same', 'mv_stock_idx'];
 
-export async function refreshStep(db, step) {
+const nextMonth = (ym) => {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+};
+
+// Menjalankan satu potongan dari satu langkah. Mengembalikan { next, total }: next = nomor potongan berikutnya (null = langkah selesai).
+export async function refreshStep(db, step, sub = 0) {
   if (!Number.isInteger(step) || step < 0 || step >= STEPS) throw Object.assign(new Error('Langkah tidak dikenal.'), { status: 400 });
-  await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
-  if (step === 4 || step === 5) {
-    const months = await db.query('SELECT mi FROM mv_mon_list ORDER BY mi');
-    const sql = step === 4 ? SQL.monRows : SQL.monSame;
-    for (const m of months) await db.exec(sql, [num(m.mi)]);
-    return;
+  if (!Number.isInteger(sub) || sub < 0) sub = 0;
+
+  if (step === 3) {                                         // penjualan harian: satu bulan per potongan
+    const months = (await db.query("SELECT DATE_FORMAT(tanggal, '%Y-%m') AS ym FROM sales_toko GROUP BY ym ORDER BY ym")).map((r) => r.ym);
+    if (sub === 0) await db.exec('TRUNCATE TABLE mv_tgl');
+    const ym = months[sub];
+    if (!ym) return { next: null, total: months.length };
+    const a = `${ym}-01`, b = nextMonth(ym);
+    await db.exec(SQL.tglMonth, [a, b, a, b]);
+    return { next: sub + 1 < months.length ? sub + 1 : null, total: months.length };
   }
-  await db.exec([SQL.dates, SQL.ks, SQL.monList, SQL.tgl, null, null, SQL.stockIdx][step]);
+  if (step === 4 || step === 5) {                           // item bulanan: satu bulan x satu bagian kode per potongan
+    const months = (await db.query('SELECT mi FROM mv_mon_list ORDER BY mi')).map((r) => num(r.mi));
+    const total = months.length * BUCKETS;
+    if (sub === 0) await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
+    if (sub >= total) return { next: null, total };
+    await db.exec(step === 4 ? SQL.monRows : SQL.monSame, [months[Math.floor(sub / BUCKETS)], sub % BUCKETS]);
+    return { next: sub + 1 < total ? sub + 1 : null, total };
+  }
+  if (sub === 0) {                                          // langkah ringan: satu perintah
+    await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
+    await db.exec([SQL.dates, SQL.ks, SQL.monList, null, null, null, SQL.stockIdx][step]);
+  }
+  return { next: null, total: 1 };
 }
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -111,14 +141,24 @@ export const stamp = () => {
 };
 
 export const refreshHandlers = {
-  // adminRefresh(token, langkah) -> { langkah, total, pesan }   token lama diabaikan (identitas dari cookie sesi)
+  // adminRefresh(token, langkah, potongan) -> { langkah, total, next, subTotal, pesan }   token lama diabaikan (identitas dari cookie sesi)
+  // next != null berarti masih ada potongan berikutnya untuk langkah yang sama (panggil lagi dengan potongan = next).
   adminrefresh: {
     need: 'edit',
     async run({ db }, a) {
       const s = Number.parseInt(a[1], 10);
-      await refreshStep(db, s);
-      if (s === STEPS - 1) await touchUpdated(db, 'refresh');   // langkah terakhir selesai
-      return { langkah: s, total: STEPS, pesan: 'Ringkasan diperbarui ' + stamp() };
+      const sub = Number.parseInt(a[2], 10) || 0;
+      let r;
+      try {
+        r = await refreshStep(db, s, sub);
+      } catch (e) {
+        if (e && e.status === 400) throw new HttpError(400, e.message);
+        console.error('refresh gagal: langkah', s, 'potongan', sub, e);
+        // Hanya administrator yang bisa sampai sini, jadi pesan aslinya ditampilkan agar penyebabnya mudah dicari.
+        throw new HttpError(500, `Langkah ${s + 1}/${STEPS} (${STEP_NAMA[s]}) gagal${sub ? ' di potongan ' + (sub + 1) : ''}: ${String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 300)}`);
+      }
+      if (s === STEPS - 1 && r.next == null) await touchUpdated(db, 'refresh');   // langkah terakhir selesai
+      return { langkah: s, total: STEPS, next: r.next, subTotal: r.total, pesan: 'Dashboard diperbarui ' + stamp() };
     },
   },
 };

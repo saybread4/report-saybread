@@ -1,7 +1,24 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
-Status: **tahap 1e — Administrator, Ingat saya, daftar toko dari tabel toko, perbaikan "Diperbarui" dan data bulan berjalan di Rank**.
-Tes otomatis (96 tes; sebagian dijalankan terhadap SQLite sungguhan, bukan hanya tiruan): `node --test "test/*.test.mjs"`.
+Status: **tahap 1f — Perbarui Dashboard bertahap, Administrator tidak melihat Admin Utama, chip Muat ulang & cakupan dihapus**.
+Tes otomatis (101 tes; sebagian dijalankan terhadap SQLite sungguhan, bukan hanya tiruan): `node --test "test/*.test.mjs"`.
+
+## Tahap 1f — Perbarui Dashboard
+**Tidak ada migrasi SQL baru.** Cukup deploy.
+
+**Apa itu "Perbarui Dashboard" (dulu "Perbarui ringkasan" / "Refresh")?** Halaman Rank, Perform, dan Monitor tidak menghitung dari data mentah setiap kali dibuka
+(terlalu berat). Hasil hitungnya disimpan di TiDB sebagai **tabel ringkasan** (`mv_dates`, `mv_ks`, `mv_mon_list`, `mv_tgl`, `mv_mon_rows`, `mv_mon_same`,
+`mv_stock_idx`). Tombol ini menghitung ulang tabel-tabel itu dari data mentah (`sales_toko`, `sales_item`, `stock`, ...). Setelah upload data baru, dashboard
+baru memakai data tersebut setelah ringkasan dihitung ulang (otomatis bila kotak "Perbarui dashboard otomatis" dicentang).
+
+- **7 langkah**: 1 tanggal · 2 daftar toko · 3 daftar bulan · 4 penjualan harian · 5 penjualan item bulanan · 6 penjualan item tanggal sama · 7 stock.
+  Langkah 4–6 dipecah menjadi potongan kecil (per bulan, dan 5–6 juga per 4 bagian kode toko) supaya tidak melewati batas transaksi/memori/waktu TiDB.
+  Satu permintaan = satu potongan; progres tampil sebagai "Memperbarui dashboard 5 / 7 (3/16)".
+- **Otomatis setelah upload hanya mengerjakan yang terdampak**: stock → langkah 7; stock_toko → 4; toko → 2 dan 7; sales_item → 5, 6, 7; modis → 7;
+  sales_toko → semua; budged/trend/item/gempar → tidak perlu. Tombol manual selalu menjalankan semua langkah.
+- **Bila gagal**, pesan lengkap dari database ditampilkan (langkah, potongan, dan pesan aslinya) supaya penyebabnya mudah dicari.
+- Chip "Muat ulang" dihapus (data baru dimuat otomatis setelah Perbarui Dashboard; di layar HP tombol itu ada di header). Chip cakupan "SEMUA BAM · Semua Cabang" dihapus.
+- Administrator tidak melihat akun Admin Utama di daftar pengguna maupun permintaan reset.
 
 ## Tahap 1e — yang berubah
 **Jalankan `migrasi-1e.sql` di TiDB SEBELUM deploy** (tabel `data_updates` + akun Administrator). Tanpa itu, aplikasi tetap jalan,

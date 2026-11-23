@@ -43,6 +43,7 @@ nav button.on{background:#fff;color:#1f2937;font-weight:700;box-shadow:0 2px 8px
 .chip{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600}
 .chip b{color:#f3dcae}
 .chip a{color:#99f6e4;cursor:pointer;margin-left:8px;text-decoration:underline}
+#scp{display:none!important}   /* cakupan ditentukan oleh jabatan saat login; area terlihat di menu pengguna */
 #scp{transition:background .15s,border-color .15s}
 #scp:hover{background:rgba(255,255,255,.14);border-color:rgba(245,201,122,.5)}
 @keyframes hb{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
@@ -740,7 +741,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     </span>
     <button id="bGempar" type="button" title="Kelola tanggal Gempar (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg>Gempar</button>
     <button id="bAdm" type="button" title="Kelola pengguna (Admin Utama / Administrator)"><svg class="ic" aria-hidden="true"><use href="#i-unlock"/></svg>User<span class="bdg" id="admBdg" style="display:none"></span></button>
-    <button id="bRfHp" type="button" title="Perbarui ringkasan data (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <button id="bRfHp" type="button" title="Hitung ulang data ringkasan agar Rank, Perform, dan Monitor memakai data terbaru (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Perbarui Dashboard</button>
     <button id="bData" type="button" title="Upload / edit / hapus data (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Data</button>
     <div class="chip" id="upd" title="Waktu terakhir isi sheet STOCK atau SALES berubah">Memuat…</div>
   </div>
@@ -928,7 +929,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <label id="dmLT">Keterangan<select id="dmKet"><option value="">Semua</option><option>closing</option><option>tgl_yang_sama</option></select></label>
    </div>
    <div class="dmhint" id="dmInfo" style="margin-top:5px"></div>
-   <div class="dmr"><button class="b s" id="dmRf" type="button"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Perbarui ringkasan</button><label><input type="checkbox" id="dmAuto" checked>Otomatis setelah upload / hapus sesuai filter</label></div>
+   <div class="dmr"><button class="b s" id="dmRf" type="button" title="Hitung ulang data ringkasan di database agar Rank, Perform, dan Monitor memakai data terbaru"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Perbarui Dashboard</button><label><input type="checkbox" id="dmAuto" checked>Perbarui dashboard otomatis setelah upload / hapus</label></div>
    <div class="dmtabs"><button type="button" data-t="up" class="on">Upload</button><button type="button" data-t="ed">Lihat / Edit / Hapus</button></div>
    <div id="dmUp">
     <div class="dmr"><b>1. Sumber data</b>
@@ -1451,10 +1452,9 @@ document.querySelectorAll('nav button[data-p]').forEach(b=>b.onclick=()=>{
   if(TAB==='PNL')pnlOpen();
 });
 let forceM=false,forceT=false,forceMeta=false,forceTr=false,forceG=false,GEM=null,GEMBUSY=false,BGC=new Map(),BG=null,BGMODE='dow',forceBg=false;   // GEM = Set tanggal Gempar 'yyyy-MM-dd'
-/* chip di header: "Data diperbarui" + tombol Muat ulang. Persen muat baris ditulis di #updP (bukan menimpa seluruh chip). */
+/* chip di header: waktu data terakhir diperbarui. Persen muat baris ditulis di #updP (bukan menimpa seluruh chip). */
 function showUpd(){
-  $('#upd').innerHTML='<svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg><span class="updw">Diperbarui </span><b>'+esc(D.updated||'-')+'</b><span id="updP"></span><a id="rl">Muat ulang</a>';
-  $('#rl').onclick=()=>load(true);
+  $('#upd').innerHTML='<svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg><span class="updw">Diperbarui </span><b>'+esc(D.updated||'-')+'</b><span id="updP"></span>';
 }
 function endChip(){PG.chip=0;const e=$('#updP');if(e)e.textContent=''}
 function load(force){
@@ -1468,7 +1468,7 @@ function load(force){
     endChip();pgEnd('s',t0);
     $('#out').innerHTML='<div class="card empty err">'+msg+'</div>';
     if(onMon())subPrompt(msg,'<svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>');
-    $('#upd').innerHTML='Gagal memuat<a id="rl">Muat ulang</a>';$('#rl').onclick=()=>load(true);
+    $('#upd').innerHTML='Gagal memuat<a id="rl">Coba lagi</a>';$('#rl').onclick=()=>load(true);
   };
   /* Dimuat bertahap: (1) meta — kamus filter + waktu data, kecil, langsung menampilkan halaman;
      (2) rows — seluruh baris Stock, menyusul di latar belakang (sudah ikut tersimpan di cache server
@@ -5278,9 +5278,32 @@ function busy(on){busyF=on;stopF=false;['#dmGo','#dmShow','#dmDelAll','#dmT','#d
  on?addEventListener('beforeunload',guard):removeEventListener('beforeunload',guard);if(on){res('','');pg(0,'Memulai…')}if(!on)$$('#dmGo').disabled=!(DATA&&DATA.ok)}
 async function call(fn,...a){for(let t=0;;t++){try{return await gsr(fn,TOKEN,...a)}catch(e){const m=(e&&e.message)||'';
  if(t<2&&/Failed to fetch|NetworkError|HTTP 5\d\d/i.test(m)){await sl(1200*(t+1));continue}throw e}}}
-async function refreshAll(){let m='';for(let i=0;i<7;i++){pg(i/7*100,'Memperbarui ringkasan '+(i+1)+' / 7…');m=(await call('adminRefresh',i)).pesan}pg(100,'Selesai');return m}
-async function autoRf(){if(!$$('#dmAuto').checked)return'';try{return'<br>✔ '+esc(await refreshAll())}catch(e){return'<br>⚠ Data sudah masuk, tetapi ringkasan gagal diperbarui ('+esc((e&&e.message)||e)+'). Tekan tombol "Perbarui ringkasan".'}}
-const okBtn='<br><button class="b p" type="button" onclick="location.reload()">Muat ulang halaman agar data baru tampil</button>';
+/* "Perbarui Dashboard" = hitung ulang tabel ringkasan (mv_*) di TiDB agar Rank/Perform/Monitor cepat dan memakai data terbaru.
+   Langkah: 0 tanggal · 1 daftar toko · 2 daftar bulan · 3 penjualan harian · 4-5 penjualan item bulanan · 6 stock.
+   Langkah 3-5 dipecah menjadi potongan kecil (per bulan / bagian kode); server memberi tahu bila masih ada potongan berikutnya. */
+async function refreshSteps(steps,onProg){
+  let m='';
+  for(let k=0;k<steps.length;k++){
+    let sub=0,tot=1;
+    do{
+      onProg(k,steps.length,sub,tot);
+      const r=await gsr('adminRefresh',TOKEN,steps[k],sub);   // sengaja tanpa ulang otomatis: potongan yang gagal tidak boleh dijalankan dua kali
+      m=r.pesan;tot=r.subTotal||1;sub=r.next==null?null:r.next;
+    }while(sub!=null);
+  }
+  return m;
+}
+const RF_ALL=[0,1,2,3,4,5,6];
+/* Setelah upload/hapus, hanya bagian ringkasan yang terdampak yang dihitung ulang. Tabel lain (budged, trend, item, gempar...) tidak memengaruhi ringkasan. */
+const RF_FOR={sales_toko:RF_ALL,sales_item:[4,5,6],stock:[6],stock_toko:[3],toko:[1,6],modis:[6]};
+const rfProg=(k,n,sub,tot)=>pg((k+(tot>1?sub/tot:0))/n*100,'Memperbarui dashboard '+(k+1)+' / '+n+(tot>1?' ('+(sub+1)+'/'+tot+')':'')+'…');
+async function refreshAll(steps){const m=await refreshSteps(steps||RF_ALL,rfProg);pg(100,'Selesai');return m}
+async function autoRf(){
+  if(!$$('#dmAuto').checked)return'';
+  const st=RF_FOR[tb];if(!st)return'';
+  try{return'<br>✔ '+esc(await refreshAll(st))}catch(e){return'<br>⚠ Data sudah masuk, tetapi dashboard gagal diperbarui ('+esc((e&&e.message)||e)+'). Tekan tombol "Perbarui Dashboard".'}
+}
+const okBtn='<br><button class="b p" type="button" onclick="location.reload()">Tampilkan data terbaru</button>';
 async function loadInfo(){try{INFO=await call('adminInfo')||{};showInfo()}catch(e){INFO={}}}
 function showInfo(){const i=INFO[tb];$$('#dmInfo').textContent=i?nf(i.n)+' baris di tabel ini'+(i.min?' · '+(T[tb].m?fr(i.min)+' s/d '+fr(i.max):i.min+' s/d '+i.max):''):''}
 function onTbl(){tb=$$('#dmT').value;const t=T[tb],ty=t.m?'month':'date';
@@ -5395,9 +5418,10 @@ $$('#dmRf').onclick=async()=>{if(busyF)return;busy(true);const t0=Date.now();
  try{const m=await refreshAll();res('ok','<b>✔ '+esc(m)+'</b> · '+((Date.now()-t0)/1000).toFixed(1)+' detik'+okBtn)}catch(e){err(e)}busy(false)};
 $$('#bRfHp').onclick=async()=>{if(!TOKEN){toast('Masuk sebagai administrator dulu');return}if(busyF)return;
  const b=$$('#bRfHp');b.disabled=true;busyF=true;const t0=Date.now();
- try{let m='';for(let i=0;i<7;i++){toast('Memperbarui ringkasan '+(i+1)+' / 7…',60000);m=(await call('adminRefresh',i)).pesan}
-  toast('✔ '+(m||'Ringkasan diperbarui')+' · '+((Date.now()-t0)/1000).toFixed(1)+' detik',6000)}
- catch(e){const m=(e&&e.message)||String(e);toast('Gagal memperbarui ringkasan: '+(/Hanya administrator/.test(m)?'sesi administrator habis, masuk lagi.':m),6000)}
+ try{const m=await refreshSteps(RF_ALL,(k,n,sub,tot)=>toast('Memperbarui dashboard '+(k+1)+' / '+n+(tot>1?' ('+(sub+1)+'/'+tot+')':'')+'…',120000));
+  toast('✔ '+(m||'Dashboard diperbarui')+' · '+((Date.now()-t0)/1000).toFixed(1)+' detik',6000);
+  load(true)}                                                  // data baru langsung dimuat, tanpa perlu "Muat ulang"
+ catch(e){const m=(e&&e.message)||String(e);toast('Gagal memperbarui dashboard: '+(/Hanya administrator/.test(m)?'sesi administrator habis, masuk lagi.':m),12000)}
  busyF=false;b.disabled=false};
 $$('#dmShow').onclick=()=>edLoad(0);$$('#dmDelAll').onclick=delAll;
 $$('#dmEd').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.a)return;const a=b.dataset.a,i=+b.dataset.i;

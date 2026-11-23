@@ -43,7 +43,7 @@ export async function handleGet({ request }, db) {
   const users = await db.query(
     'SELECT nik, nama, jabatan, bam_scope, aktif, must_change, last_login, pw_changed_at, created_at FROM users ORDER BY jabatan, nama');
   return json({
-    users: users.map(row),
+    users: users.filter((u) => isUtama(me) || u.jabatan !== 'ADMIN_PUSAT').map(row),   // Administrator tidak melihat akun Admin Utama
     bamList: await bamList(db),
     jabatan: JABATAN.filter((k) => isUtama(me) || k !== 'ADMIN_PUSAT').map((k) => ({ key: k, label: LABEL[k] })),
   });

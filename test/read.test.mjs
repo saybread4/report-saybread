@@ -132,18 +132,47 @@ test('getbasdataitem: pembagian ke tanggal menjumlah kembali ke total bulan', as
   assert.equal(r.rows.reduce((s, x) => s + x[3], 0), 3000);
 });
 
-test('refresh: TRUNCATE lalu isi ulang; langkah bulanan berulang per bulan', async () => {
-  const db = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 0 }, { mi: 1 }, { mi: 2 }]]]);
-  await refreshStep(db, 0);
+test('refresh: TRUNCATE lalu isi ulang; langkah berat dipecah per bulan (dan per bagian kode), satu perintah per permintaan', async () => {
+  const db = mock([]);
+  assert.deepEqual(await refreshStep(db, 0), { next: null, total: 1 });
   assert.match(db.calls[0].s, /^TRUNCATE TABLE mv_dates$/); assert.match(db.calls[1].s, /^INSERT INTO mv_dates/);
+  assert.deepEqual(await refreshStep(mock([]), 0, 3), { next: null, total: 1 });          // langkah ringan: potongan >0 tidak melakukan apa-apa
+
+  // langkah 4: 3 bulan x 4 bagian = 12 potongan; TRUNCATE hanya di potongan pertama
   const d2 = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 0 }, { mi: 1 }, { mi: 2 }]]]);
-  await refreshStep(d2, 4);
-  assert.equal(d2.calls.filter((c) => /^INSERT INTO mv_mon_rows/.test(c.s)).length, 3);
-  assert.deepEqual(d2.calls.filter((c) => c.exec && c.a.length).map((c) => c.a[0]), [0, 1, 2]);
-  for (let s = 0; s < STEPS; s++) await refreshStep(mock([[/FROM mv_mon_list/, []]]), s);
+  let sub = 0, n = 0;
+  do { const r = await refreshStep(d2, 4, sub); assert.equal(r.total, 12); sub = r.next; n++; } while (sub != null);
+  assert.equal(n, 12);
+  assert.equal(d2.calls.filter((c) => /^TRUNCATE TABLE mv_mon_rows$/.test(c.s)).length, 1);
+  const ins = d2.calls.filter((c) => /^INSERT INTO mv_mon_rows/.test(c.s));
+  assert.equal(ins.length, 12);
+  assert.match(ins[0].s, /AND mm\.mi = \? AND \(CRC32\(i\.kode\) % 4\) = \?/);
+  assert.deepEqual(ins.map((c) => c.a), [0, 1, 2].flatMap((m) => [0, 1, 2, 3].map((b) => [m, b])));
+  const d3 = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 5 }]]]);
+  await refreshStep(d3, 5, 2);
+  assert.deepEqual(d3.calls.filter((c) => c.exec).map((c) => [c.s.slice(0, 29), c.a]), [['INSERT INTO mv_mon_same (kode', [5, 2]]]);   // tanpa TRUNCATE di potongan > 0
+
+  // langkah 3: satu bulan per potongan, termasuk pergantian tahun
+  const d4 = mock([[/FROM sales_toko GROUP BY ym/, [{ ym: '2026-11' }, { ym: '2026-12' }]]]);
+  assert.deepEqual(await refreshStep(d4, 3, 0), { next: 1, total: 2 });
+  assert.deepEqual(await refreshStep(d4, 3, 1), { next: null, total: 2 });
+  assert.deepEqual(d4.calls.filter((c) => /^INSERT INTO mv_tgl/.test(c.s)).map((c) => c.a),
+    [['2026-11-01', '2026-12-01', '2026-11-01', '2026-12-01'], ['2026-12-01', '2027-01-01', '2026-12-01', '2027-01-01']]);
+  assert.deepEqual(await refreshStep(mock([[/FROM sales_toko GROUP BY ym/, []]]), 3, 0), { next: null, total: 0 });   // belum ada data penjualan
+
+  for (let st = 0; st < STEPS; st++) await refreshStep(mock([[/FROM mv_mon_list/, []], [/FROM sales_toko GROUP BY ym/, []]]), st);
   await assert.rejects(refreshStep(mock([]), 9));
   const r = await handlers.adminrefresh.run({ db: mock([]) }, ['tok', 0]);
-  assert.deepEqual([r.langkah, r.total], [0, 7]); assert.match(r.pesan, /^Ringkasan diperbarui \d\d\/\d\d\/\d{4} \d\d:\d\d$/);
+  assert.deepEqual([r.langkah, r.total, r.next, r.subTotal], [0, 7, null, 1]);
+  assert.match(r.pesan, /^Dashboard diperbarui \d\d\/\d\d\/\d{4} \d\d:\d\d$/);
+});
+
+test('refresh: kegagalan database ditampilkan lengkap (langkah, potongan, pesan asli) untuk administrator', async () => {
+  const db = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 0 }]]]);
+  db.exec = async (sql) => { if (/^INSERT INTO mv_mon_rows/.test(sql.replace(/\s+/g, ' ').trim())) throw new Error('Transaction is too large, size: 104857600'); };
+  await assert.rejects(handlers.adminrefresh.run({ db }, ['tok', 4, 1]),
+    (e) => { assert.equal(e.status, 500); assert.equal(e.message, 'Langkah 5/7 (penjualan item bulanan) gagal di potongan 2: Transaction is too large, size: 104857600'); return true; });
+  await assert.rejects(handlers.adminrefresh.run({ db: mock([]) }, ['tok', 9]), (e) => e.status === 400);
 });
 
 test('fungsi baru terdaftar dengan hak akses yang sah', () => {

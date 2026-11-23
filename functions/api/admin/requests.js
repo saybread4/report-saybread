@@ -23,7 +23,8 @@ export async function handleGet({ request }, db) {
   return json({
     registrations: regs.map((r) => ({ id: Number(r.id), nik: r.nik, nama: r.nama, jabatan_diminta: r.jabatan_diminta,
       label_diminta: LABEL[r.jabatan_diminta] || r.jabatan_diminta, area_diminta: r.area_diminta, kontak: r.kontak || '', created_at: r.created_at || null })),
-    resets: rst.map((r) => ({ id: Number(r.id), nik: r.nik, nama: r.nama || '', label: LABEL[r.jabatan] || '', kontak: r.kontak || '', created_at: r.created_at || null })),
+    resets: rst.filter((r) => isUtama(me) || r.jabatan !== 'ADMIN_PUSAT').map(   // permintaan reset milik Admin Utama tidak terlihat oleh Administrator
+      (r) => ({ id: Number(r.id), nik: r.nik, nama: r.nama || '', label: LABEL[r.jabatan] || '', kontak: r.kontak || '', created_at: r.created_at || null })),
     bamList: await bamList(db),
     jabatan: JABATAN.filter((k) => isUtama(me) || k !== 'ADMIN_PUSAT').map((k) => ({ key: k, label: LABEL[k] })),
   });
