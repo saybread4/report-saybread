@@ -39,12 +39,18 @@ const selFilter = (ks, pn, cb) => {
 // ---- Stock (mv_stock_idx) dengan indeks disusun ulang sesuai area -------------------------------
 const DIM = [['cab', 'cab', 'i_cab'], ['bas', 'bas', 'i_bas'], ['as', 'as_', 'i_as'], ['tk', 'tk', 'i_tk'], ['ds', 'deskripsi', 'i_ds'], ['jn', 'jn', 'i_jn'], ['md', 'md', 'i_md']];
 
-async function stockScoped(db, user) {
+// light = true: hanya kolom angka/indeks (untuk getrows). Teks panjang (deskripsi, tk JSON, dll.) tidak dibawa, karena getrows
+// hanya memetakan ulang indeks; ini memangkas memori/CPU Worker secara besar-besaran pada tabel stock yang ratusan ribu baris
+// (batas memori Cloudflare yang terlampaui membuat SEMUA permintaan yang sedang berjalan gagal dengan HTTP 503).
+async function stockScoped(db, user, light = false) {
   const [rows, ok] = await Promise.all([
-    db.query('SELECT kode, deskripsi, cab, bas, as_, tk, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx'),
+    db.query(light
+      ? 'SELECT kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx'
+      : 'SELECT kode, deskripsi, cab, bas, as_, tk, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx'),
     allowedNorm(db, user),
   ]);
   const keep = ok === null ? rows : rows.filter((r) => ok.has(norm(r.kode)));
+  if (light) return keep;
   return keep.map((r) => {
     let tk = r.tk;
     if (typeof tk === 'string') { try { tk = JSON.parse(tk); } catch { tk = [tk]; } }
@@ -200,7 +206,7 @@ export const readHandlers = {
   getrows: {
     need: 'view',
     async run({ db, user }) {
-      const rows = await stockScoped(db, user);
+      const rows = await stockScoped(db, user, true);
       const m = dimMaps(rows);
       const g = (n, r, c) => m[n].remap.get(num(r[c]));
       return rows.map((r) => [g('cab', r, 'i_cab'), g('bas', r, 'i_bas'), g('as', r, 'i_as'), g('tk', r, 'i_tk'),

@@ -3,6 +3,19 @@
 Status: **tahap 1f — Perbarui Dashboard bertahap, Administrator tidak melihat Admin Utama, chip Muat ulang & cakupan dihapus**.
 Tes otomatis (101 tes; sebagian dijalankan terhadap SQLite sungguhan, bukan hanya tiruan): `node --test "test/*.test.mjs"`.
 
+## Tahap 1g — Perbarui Dashboard aman & pembacaan lebih ringan
+**Tidak ada migrasi SQL.** Cukup deploy.
+
+- **Refresh tidak lagi mengosongkan tabel lebih dulu.** Langkah 1–3 (tanggal, daftar toko, daftar bulan) memakai transaksi (hapus + isi atomik).
+  Langkah 4 (penjualan harian, `mv_tgl`) dikerjakan per jendela 10 hari (3 per bulan), tiap jendela = hapus + isi dalam satu transaksi.
+  Jika satu potongan gagal (mis. HTTP 503), isi lama potongan itu tetap utuh, dan data bulan lain tidak ikut hilang
+  (dulu `TRUNCATE` dulu baru isi: gagal di tengah = November kosong/terpotong sampai refresh berikutnya berhasil).
+- Langkah 1–4 aman diulang, jadi browser mengulang otomatis (maks. 3x) saat gangguan sementara. Langkah 5–7 tetap tidak diulang otomatis.
+- Semua fungsi baca (`get*`) diulang otomatis (maks. 2x) di browser bila server menjawab 502/503/504 atau koneksi putus.
+- `getrows` (seluruh baris Stock) hanya mengambil kolom angka/indeks, bukan teks panjang, sehingga jauh lebih hemat memori Worker.
+- Bila data November masih terpotong setelah refresh sukses, berarti `sales_toko` memang belum lengkap (upload belum selesai): cek dengan
+  `SELECT MAX(tanggal), COUNT(DISTINCT tanggal) FROM sales_toko WHERE tanggal >= '2026-11-01';` dan bandingkan dengan `mv_tgl`.
+
 ## Tahap 1f — Perbarui Dashboard
 **Tidak ada migrasi SQL baru.** Cukup deploy.
 

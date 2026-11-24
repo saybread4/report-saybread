@@ -1015,10 +1015,21 @@ async function api(path,body){
   if(!r.ok){const e=new Error((j&&j.message)||('HTTP '+r.status));e.code=j&&j.code;e.status=r.status;throw e}
   return j;
 }
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+/* Gangguan sementara (HTTP 502/503/504, koneksi putus) tidak boleh langsung jadi "Gagal memuat": fungsi baca (get*) aman diulang. */
+const TRANSIENT=e=>!e.status||e.status===502||e.status===503||e.status===504;
 async function rpc(fn,a){
-  if(String(fn).toLowerCase()==='warmcaches') return null;   // tidak ada pemanasan cache di server baru
-  try{return await api('/api/rpc/'+encodeURIComponent(String(fn).toLowerCase()),{a:a})}
-  catch(e){if(e.code==='LOGIN'||e.code==='MUST_CHANGE')authNeeded(e.code);throw e}
+  const name=String(fn).toLowerCase();
+  if(name==='warmcaches') return null;   // tidak ada pemanasan cache di server baru
+  const tries=/^get/.test(name)?3:1;     // hanya fungsi baca yang diulang otomatis (maks. 2 kali tambahan)
+  for(let t=0;;t++){
+    try{return await api('/api/rpc/'+encodeURIComponent(name),{a:a})}
+    catch(e){
+      if(e.code==='LOGIN'||e.code==='MUST_CHANGE'){authNeeded(e.code);throw e}
+      if(t+1<tries&&TRANSIENT(e)){await wait(900*(t+1));continue}
+      throw e;
+    }
+  }
 }
 function mk(ok,no){
   const h={withSuccessHandler:f=>mk(f,no),withFailureHandler:f=>mk(ok,f)};
@@ -5287,7 +5298,13 @@ async function refreshSteps(steps,onProg){
     let sub=0,tot=1;
     do{
       onProg(k,steps.length,sub,tot);
-      const r=await gsr('adminRefresh',TOKEN,steps[k],sub);   // sengaja tanpa ulang otomatis: potongan yang gagal tidak boleh dijalankan dua kali
+      /* Langkah 0-3 (tanggal, daftar toko, daftar bulan, penjualan harian) mengganti isinya secara atomik, jadi aman diulang bila
+         gagal sementara (503 / koneksi putus). Langkah 4-6 mengisi tabel yang sudah dikosongkan, sehingga TIDAK diulang otomatis. */
+      let r;
+      for(let t=0;;t++){
+        try{r=await gsr('adminRefresh',TOKEN,steps[k],sub);break}
+        catch(e){if(steps[k]<=3&&t<3&&(!e.status||e.status>=500)){await wait(1500*(t+1));continue}throw e}
+      }
       m=r.pesan;tot=r.subTotal||1;sub=r.next==null?null:r.next;
     }while(sub!=null);
   }

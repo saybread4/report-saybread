@@ -1,7 +1,7 @@
 // Isi ulang tabel ringkasan mv_* dari data mentah (pengganti `refresh materialized view` di Supabase).
 // Tabel ringkasan = hasil hitung yang disimpan di TiDB supaya halaman Rank/Perform/Monitor cepat dibuka.
 // Dipanggil bertahap oleh tombol "Perbarui Dashboard": 7 langkah besar, dan langkah yang berat (3, 4, 5) dipecah lagi
-// menjadi potongan kecil (per bulan, dan untuk 4-5 juga per bagian kode toko). Satu permintaan = satu perintah SQL yang
+// menjadi potongan kecil (langkah 4: jendela 10 hari; langkah 5-6: per bulan x bagian kode toko). Satu permintaan = satu perintah SQL yang
 // ukurannya terbatas, sehingga tidak melewati batas transaksi/memori/waktu TiDB.
 import { num } from '../util.js';
 import { touchUpdated } from '../dataupdates.js';
@@ -115,19 +115,45 @@ const nextMonth = (ym) => {
   return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
 };
 
+// Beberapa perintah sebagai satu kesatuan: bila salah satu gagal, semuanya dibatalkan dan isi lama tabel TETAP UTUH.
+// (Dulu tabel dikosongkan dulu baru diisi; kalau gagal di tengah, hasilnya setengah kosong, mis. data November hilang.)
+// Bila db tidak punya tx (database tiruan di tes), perintah dijalankan berurutan.
+const atomic = (db, fn) => (typeof db.tx === 'function' ? db.tx(fn) : fn(db));
+
+// Penjualan harian dipecah menjadi jendela 10 harian per bulan: [awal, akhir) -> perintah kecil dan cepat.
+export const WINDOW_DAYS = [1, 11, 21];
+export function tglWindows(months) {
+  const out = [];
+  for (const ym of months) {
+    const end = nextMonth(ym);
+    WINDOW_DAYS.forEach((d, i) => {
+      const a = `${ym}-${String(d).padStart(2, '0')}`;
+      const b = i + 1 < WINDOW_DAYS.length ? `${ym}-${String(WINDOW_DAYS[i + 1]).padStart(2, '0')}` : end;
+      out.push([a, b]);
+    });
+  }
+  return out;
+}
+
 // Menjalankan satu potongan dari satu langkah. Mengembalikan { next, total }: next = nomor potongan berikutnya (null = langkah selesai).
 export async function refreshStep(db, step, sub = 0) {
   if (!Number.isInteger(step) || step < 0 || step >= STEPS) throw Object.assign(new Error('Langkah tidak dikenal.'), { status: 400 });
   if (!Number.isInteger(sub) || sub < 0) sub = 0;
 
-  if (step === 3) {                                         // penjualan harian: satu bulan per potongan
+  if (step === 3) {                                         // penjualan harian: satu jendela 10 hari per potongan, diganti secara atomik
     const months = (await db.query("SELECT DATE_FORMAT(tanggal, '%Y-%m') AS ym FROM sales_toko GROUP BY ym ORDER BY ym")).map((r) => r.ym);
-    if (sub === 0) await db.exec('TRUNCATE TABLE mv_tgl');
-    const ym = months[sub];
-    if (!ym) return { next: null, total: months.length };
-    const a = `${ym}-01`, b = nextMonth(ym);
-    await db.exec(SQL.tglMonth, [a, b, a, b]);
-    return { next: sub + 1 < months.length ? sub + 1 : null, total: months.length };
+    const wins = tglWindows(months);
+    if (sub === 0) {                                        // buang hanya sisa di luar rentang data penjualan; isi lama tetap ada sampai diganti
+      if (!months.length) await db.exec('DELETE FROM mv_tgl');
+      else await db.exec('DELETE FROM mv_tgl WHERE tanggal < ? OR tanggal >= ?', [`${months[0]}-01`, nextMonth(months[months.length - 1])]);
+    }
+    const w = wins[sub];
+    if (!w) return { next: null, total: wins.length };
+    await atomic(db, async (t) => {
+      await t.exec('DELETE FROM mv_tgl WHERE tanggal >= ? AND tanggal < ?', [w[0], w[1]]);
+      await t.exec(SQL.tglMonth, [w[0], w[1], w[0], w[1]]);
+    });
+    return { next: sub + 1 < wins.length ? sub + 1 : null, total: wins.length };
   }
   if (step === 4 || step === 5) {                           // item bulanan: satu bulan x satu bagian kode per potongan
     const months = (await db.query('SELECT mi FROM mv_mon_list ORDER BY mi')).map((r) => num(r.mi));
@@ -143,9 +169,11 @@ export async function refreshStep(db, step, sub = 0) {
     await db.exec(SQL.stockIdx(sub));
     return { next: sub + 1 < STOCK_BUCKETS ? sub + 1 : null, total: STOCK_BUCKETS };
   }
-  if (sub === 0) {                                          // langkah ringan: satu perintah
-    await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
-    await db.exec([SQL.dates, SQL.ks, SQL.monList][step]);
+  if (sub === 0) {                                          // langkah ringan: hapus + isi dalam satu transaksi (gagal -> isi lama tetap)
+    await atomic(db, async (t) => {
+      await t.exec(`DELETE FROM ${TABLES[step]}`);
+      await t.exec([SQL.dates, SQL.ks, SQL.monList][step]);
+    });
   }
   return { next: null, total: 1 };
 }

@@ -135,7 +135,7 @@ test('getbasdataitem: pembagian ke tanggal menjumlah kembali ke total bulan', as
 test('refresh: TRUNCATE lalu isi ulang; langkah berat dipecah per bulan (dan per bagian kode), satu perintah per permintaan', async () => {
   const db = mock([]);
   assert.deepEqual(await refreshStep(db, 0), { next: null, total: 1 });
-  assert.match(db.calls[0].s, /^TRUNCATE TABLE mv_dates$/); assert.match(db.calls[1].s, /^INSERT INTO mv_dates/);
+  assert.match(db.calls[0].s, /^DELETE FROM mv_dates$/); assert.match(db.calls[1].s, /^INSERT INTO mv_dates/);
   assert.deepEqual(await refreshStep(mock([]), 0, 3), { next: null, total: 1 });          // langkah ringan: potongan >0 tidak melakukan apa-apa
 
   // langkah 4: 3 bulan x 4 bagian = 12 potongan; TRUNCATE hanya di potongan pertama
@@ -152,12 +152,15 @@ test('refresh: TRUNCATE lalu isi ulang; langkah berat dipecah per bulan (dan per
   await refreshStep(d3, 5, 2);
   assert.deepEqual(d3.calls.filter((c) => c.exec).map((c) => [c.s.slice(0, 29), c.a]), [['INSERT INTO mv_mon_same (kode', [5, 2]]]);   // tanpa TRUNCATE di potongan > 0
 
-  // langkah 3: satu bulan per potongan, termasuk pergantian tahun
+  // langkah 3: tiga jendela 10 harian per bulan, termasuk pergantian tahun; tiap jendela = hapus + isi (atomik)
   const d4 = mock([[/FROM sales_toko GROUP BY ym/, [{ ym: '2026-11' }, { ym: '2026-12' }]]]);
-  assert.deepEqual(await refreshStep(d4, 3, 0), { next: 1, total: 2 });
-  assert.deepEqual(await refreshStep(d4, 3, 1), { next: null, total: 2 });
-  assert.deepEqual(d4.calls.filter((c) => /^INSERT INTO mv_tgl/.test(c.s)).map((c) => c.a),
-    [['2026-11-01', '2026-12-01', '2026-11-01', '2026-12-01'], ['2026-12-01', '2027-01-01', '2026-12-01', '2027-01-01']]);
+  assert.deepEqual(await refreshStep(d4, 3, 0), { next: 1, total: 6 });
+  for (let k = 1; k < 5; k++) await refreshStep(d4, 3, k);
+  assert.deepEqual(await refreshStep(d4, 3, 5), { next: null, total: 6 });
+  assert.deepEqual(d4.calls.filter((c) => /^INSERT INTO mv_tgl/.test(c.s)).map((c) => c.a[0] + '..' + c.a[1]),
+    ['2026-11-01..2026-11-11', '2026-11-11..2026-11-21', '2026-11-21..2026-12-01', '2026-12-01..2026-12-11', '2026-12-11..2026-12-21', '2026-12-21..2027-01-01']);
+  assert.equal(d4.calls.filter((c) => /^TRUNCATE/.test(c.s)).length, 0, 'mv_tgl tidak boleh dikosongkan lebih dulu');
+  assert.equal(d4.calls.filter((c) => /^DELETE FROM mv_tgl WHERE tanggal >= \? AND tanggal < \?/.test(c.s)).length, 6);
   assert.deepEqual(await refreshStep(mock([[/FROM sales_toko GROUP BY ym/, []]]), 3, 0), { next: null, total: 0 });   // belum ada data penjualan
 
   // langkah stock dibagi 8 bagian; hanya potongan pertama yang mengosongkan tabel.

@@ -26,6 +26,11 @@ function sqliteDb(setup) {
     raw, log: [],
     async query(sql, a = []) { db.log.push(sql); return raw.prepare(sql).all(...a).map((r) => ({ ...r })); },
     async exec(sql, a = []) { db.log.push(sql); raw.prepare(sql).run(...a); },
+    // meniru db.tx() produksi: BEGIN ... COMMIT, atau ROLLBACK bila ada yang gagal
+    async tx(fn) {
+      raw.exec('BEGIN');
+      try { const r = await fn(db); raw.exec('COMMIT'); return r; } catch (e) { raw.exec('ROLLBACK'); throw e; }
+    },
   };
   return db;
 }
@@ -220,14 +225,14 @@ const rowsOf = (db, sql) => db.raw.prepare(sql).all().map((r) => JSON.stringify(
 
 test('refresh mv_tgl per bulan = gabungan penuh (stock DOUGH dijumlahkan, jenis lain diabaikan, lintas tahun)', async () => {
   const db = refreshDb();
-  assert.equal(await db.run(3), 4);                                                            // 4 bulan = 4 potongan
+  assert.equal(await db.run(3), 12);                                                           // 4 bulan x 3 jendela = 12 potongan
   const ref = rowsOf(db, `SELECT s.kode, s.tanggal, COALESCE(st.q, 0), s.produksi, s.sales_qty, s.sales_rp, s.margin, s.ba_qty, s.ba_rp
       FROM sales_toko s LEFT JOIN (SELECT kode, tanggal, SUM(stock_total) AS q FROM stock_toko WHERE UPPER(jenis) LIKE 'DOUGH%' GROUP BY kode, tanggal) st
         ON st.kode = s.kode AND st.tanggal = s.tanggal`);
   const got = rowsOf(db, 'SELECT * FROM mv_tgl');
   assert.equal(got.length, db.raw.prepare('SELECT COUNT(*) n FROM sales_toko').get().n);
   assert.deepEqual(got, ref);
-  assert.equal(await db.run(3), 4);                                                            // diulang: tidak menggandakan baris
+  assert.equal(await db.run(3), 12);                                                           // diulang: tidak menggandakan baris
   assert.deepEqual(rowsOf(db, 'SELECT * FROM mv_tgl'), ref);
 });
 
@@ -249,3 +254,40 @@ for (const [step, tbl, ket] of [[4, 'mv_mon_rows', 'closing'], [5, 'mv_mon_same'
     if (step === 4) assert.ok(!got.some((r) => { const x = JSON.parse(r); return x[2] === 'Roti C' && x[4] === 0 && x[5] === 0 && x[6] === 0; }), 'baris semuanya nol harus dibuang (HAVING)');
   });
 }
+
+
+// ---- Refresh harus AMAN: gagal di tengah tidak boleh menghilangkan data yang sudah ada ----------------------
+test('refresh mv_tgl: gagal di tengah (mis. 503) -> data lama tetap utuh, potongan yang gagal dibatalkan, ulang berhasil', async () => {
+  const db = refreshDb();
+  await db.run(3);
+  const before = rowsOf(db, 'SELECT * FROM mv_tgl');
+  assert.ok(before.length > 100);
+
+  // data penjualan baru masuk (mis. 23 Nov), lalu refresh gagal pada jendela tertentu
+  db.raw.prepare("INSERT INTO sales_toko (tanggal, kode, produksi, sales_qty, sales_rp, margin, ba_qty, ba_rp) VALUES ('2026-11-23', 'G100', 1, 9, 900, 1, 0, 0)").run();
+  const realExec = db.exec; let boom = true;
+  db.exec = async (sql, a = []) => { if (boom && /^\s*INSERT INTO mv_tgl/.test(sql) && a[0] === '2026-11-21') throw new Error('HTTP 503'); return realExec(sql, a); };
+  await assert.rejects(db.run(3), /503/);
+  const mid = rowsOf(db, 'SELECT * FROM mv_tgl');
+  // jendela 21-30 Nov dibatalkan utuh (baris lama tetap ada), jendela lain sudah terganti -> tidak ada yang kosong
+  assert.ok(mid.length >= before.length, 'jumlah baris tidak boleh berkurang karena kegagalan');
+  for (const r of before) assert.ok(mid.includes(r), 'baris lama hilang: ' + r);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM mv_tgl WHERE tanggal = '2026-11-23'").get().n, 0, 'jendela yang gagal tidak setengah terisi');
+
+  boom = false;                                              // diulang setelah gangguan reda
+  await db.run(3);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) n FROM mv_tgl WHERE tanggal = '2026-11-23'").get().n, 1, 'data 23 Nov harus masuk');
+  assert.equal(db.raw.prepare('SELECT COUNT(*) n FROM mv_tgl').get().n, db.raw.prepare('SELECT COUNT(*) n FROM sales_toko').get().n);
+});
+
+test('refresh langkah ringan (tanggal/toko/bulan): gagal di tengah -> isi lama tetap, tidak kosong', async () => {
+  const db = refreshDb();
+  await db.run(0);
+  const before = rowsOf(db, 'SELECT * FROM mv_dates');
+  assert.ok(before.length > 0);
+  db.raw.prepare("INSERT INTO sales_toko (tanggal, kode, produksi, sales_qty, sales_rp, margin, ba_qty, ba_rp) VALUES ('2026-11-23', 'G100', 1, 9, 900, 1, 0, 0)").run();
+  const realExec = db.exec;
+  db.exec = async (sql, a = []) => { if (/^\s*INSERT INTO mv_dates/.test(sql)) throw new Error('HTTP 503'); return realExec(sql, a); };
+  await assert.rejects(db.run(0), /503/);
+  assert.deepEqual(rowsOf(db, 'SELECT * FROM mv_dates'), before);
+});
