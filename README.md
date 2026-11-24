@@ -4,7 +4,7 @@ Status: **tahap 1j — Rank BAM, perbaikan Stock >10.000 baris, hemat RU**. Tes:
 
 ## Tahap 1j
 - **Rank BAM** (grup `bam`): tombol di halaman Rank tepat sebelum BAS (juga sheet Excel "Rank BAM"). Hanya untuk jabatan KOORBAM, ADMIN_KOORBAM, ADMINISTRATOR, ADMIN_PUSAT (`canRankBam` di `auth.js`, `can.rankbam` untuk tampilan). Jabatan lain (BAM, BAS, BASTR) tidak menerima grup ini dari server dan querynya tidak dijalankan. Dikelompokkan dari kolom `toko.bam`. Rank kini 7 grup x maks 4 rentang tanggal = maks 28 query (hasilnya di-cache).
-- **Stock**: `mv_stock_idx` kini dibaca per halaman (`queryAll`). Sebelumnya `db.query` memotong diam-diam di 10.000 baris sehingga sebagian toko tidak muncul.
+- **Stock**: `mv_stock_idx` dibaca per halaman dan tiap halaman langsung dilipat (`stockEach`, `stockDictionaries`, `stockNumericRows`), baris mentah tidak disimpan. Sebelumnya `db.query` memotong diam-diam di 10.000 baris sehingga sebagian toko tidak muncul; memuat semuanya sekaligus (`queryAll`) melebihi memori Worker -> HTTP 503 untuk SEMUA permintaan.
 - `CACHE_REV` di `readcache.js`: naikkan setiap bentuk keluaran fungsi `get*` berubah.
 
 ## Tahap 1i — hemat RU TiDB Cloud (kuota gratis Starter: 50 juta RU / bulan / instance)

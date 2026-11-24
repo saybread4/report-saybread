@@ -5,7 +5,7 @@ import { bamWhere } from '../scope.js';
 import { lastUpdated } from '../dataupdates.js';
 import { norm, nz, num } from '../util.js';
 import {
-  arr, str, ymd, NORM, inList, rnd, chunks, queryAll, allowedNorm, scopedKs, datesInfo, tglRows, overrides, tokoMap,
+  arr, str, ymd, NORM, inList, rnd, chunks, queryAll, PAGE, allowedNorm, scopedKs, datesInfo, tglRows, overrides, tokoMap,
 } from '../ks.js';
 
 const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -39,37 +39,55 @@ const selFilter = (ks, pn, cb) => {
 // ---- Stock (mv_stock_idx) dengan indeks disusun ulang sesuai area -------------------------------
 const DIM = [['cab', 'cab', 'i_cab'], ['bas', 'bas', 'i_bas'], ['as', 'as_', 'i_as'], ['tk', 'tk', 'i_tk'], ['ds', 'deskripsi', 'i_ds'], ['jn', 'jn', 'i_jn'], ['md', 'md', 'i_md']];
 
-// light = true: hanya kolom angka/indeks (untuk getrows). Teks panjang (deskripsi, tk JSON, dll.) tidak dibawa, karena getrows
-// hanya memetakan ulang indeks; ini memangkas memori/CPU Worker secara besar-besaran pada tabel stock yang ratusan ribu baris
-// (batas memori Cloudflare yang terlampaui membuat SEMUA permintaan yang sedang berjalan gagal dengan HTTP 503).
-async function stockScoped(db, user, light = false) {
-  // mv_stock_idx bisa >10.000 baris (ratusan toko x puluhan item); driver memotong di 10.000 TANPA galat sehingga sebagian toko hilang
-  // dari halaman Stock. Dibaca per halaman lewat queryAll dengan urutan tetap.
-  const [rows, ok] = await Promise.all([
-    queryAll(db, light
-      ? 'SELECT kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx'
-      : 'SELECT kode, deskripsi, cab, bas, as_, tk, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx',
-      [], 'kode, i_jn, i_ds, i_md, qty'),
-    allowedNorm(db, user),
-  ]);
-  const keep = ok === null ? rows : rows.filter((r) => ok.has(norm(r.kode)));
-  if (light) return keep;
-  return keep.map((r) => {
-    let tk = r.tk;
-    if (typeof tk === 'string') { try { tk = JSON.parse(tk); } catch { tk = [tk]; } }
-    return { ...r, tk };
-  });
+// mv_stock_idx bisa sangat besar (puluhan sampai ratusan ribu baris). Driver memotong hasil di 10.000 baris TANPA galat (toko hilang),
+// tetapi memuat SEMUA baris + kolom teks sekaligus melebihi batas memori Worker (128 MB) dan membuat SEMUA permintaan yang sedang berjalan
+// gagal dengan HTTP 503. Jadi tabel dibaca per halaman dan tiap halaman langsung dilipat ke struktur kecil; baris mentah tidak disimpan.
+const STOCK_ORDER = 'kode, i_jn, i_ds, i_md, qty';
+async function stockEach(db, user, sql, fold) {
+  const ok = await allowedNorm(db, user);
+  for (let off = 0; ; off += PAGE) {
+    const rows = await db.query(`${sql} ORDER BY ${STOCK_ORDER} LIMIT ${PAGE} OFFSET ${off}`);
+    fold(ok === null ? rows : rows.filter((r) => ok.has(norm(r.kode))));
+    if (rows.length < PAGE) break;
+  }
+}
+const parseTk = (tk) => {
+  if (typeof tk !== 'string') return tk;
+  try { return JSON.parse(tk); } catch { return [tk]; }
+};
+
+// Kamus filter: indeks -> nilai, urut indeks asli (indeks lama bisa berlubang setelah disaring per area; getrows memetakannya ulang 0..n-1).
+async function stockDictionaries(db, user) {
+  const seen = {};
+  for (const [name] of DIM) seen[name] = new Map();
+  await stockEach(db, user,
+    'SELECT kode, deskripsi, cab, bas, as_, tk, jn, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx',
+    (rows) => {
+      for (const r of rows) for (const [name, col, icol] of DIM) {
+        const m = seen[name], k = num(r[icol]);
+        if (!m.has(k)) m.set(k, name === 'tk' ? parseTk(r.tk) : r[col]);   // JSON toko hanya diurai sekali per indeks
+      }
+    });
+  const d = {};
+  for (const [name] of DIM) d[name] = [...seen[name].keys()].sort((x, y) => x - y).map((k) => seen[name].get(k));
+  return d;
 }
 
-// Indeks lama bisa berlubang setelah disaring per area, jadi dipetakan ulang 0..n-1 (urutan asli dipertahankan).
-function dimMaps(rows) {
-  const out = {};
-  for (const [name, col, icol] of DIM) {
-    const seen = new Map();
-    for (const r of rows) { const k = num(r[icol]); if (!seen.has(k)) seen.set(k, r[col]); }
-    const keys = [...seen.keys()].sort((a, b) => a - b);
-    out[name] = { values: keys.map((k) => seen.get(k)), remap: new Map(keys.map((k, i) => [k, i])) };
-  }
+// Semua baris angka untuk halaman Stock, indeks dimetakan ulang 0..n-1: [cab, bas, as, tk, ds, jn, qty, qpd, md].
+const ROW_POS = { cab: 0, bas: 1, as: 2, tk: 3, ds: 4, jn: 5, md: 8 };
+async function stockNumericRows(db, user) {
+  const out = [], used = {};
+  for (const [name] of DIM) used[name] = new Set();
+  await stockEach(db, user, 'SELECT kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx', (rows) => {
+    for (const r of rows) {
+      const a = [num(r.i_cab), num(r.i_bas), num(r.i_as), num(r.i_tk), num(r.i_ds), num(r.i_jn), num(r.qty), rnd(r.qpd, 2), num(r.i_md)];
+      for (const [name] of DIM) used[name].add(a[ROW_POS[name]]);
+      out.push(a);
+    }
+  });
+  const remap = {};
+  for (const [name] of DIM) remap[name] = new Map([...used[name]].sort((x, y) => x - y).map((k, i) => [k, i]));
+  for (const a of out) for (const [name] of DIM) a[ROW_POS[name]] = remap[name].get(a[ROW_POS[name]]);
   return out;
 }
 
@@ -203,10 +221,7 @@ export const readHandlers = {
   getmeta: {
     need: 'view',
     async run({ db, user }) {
-      const [rows, toko] = await Promise.all([stockScoped(db, user), tokoScoped(db, user)]);
-      const maps = dimMaps(rows);
-      const d = {};
-      for (const [name] of DIM) d[name] = [...maps[name].values];
+      const [d, toko] = await Promise.all([stockDictionaries(db, user), tokoScoped(db, user)]);
       const srows = storeRows(d, toko);
       const st = (await db.query('SELECT MAX(created_at) AS u, MAX(tanggal) AS t FROM stock'))[0] || {};
       const sb = await salesBulan(db);
@@ -225,11 +240,7 @@ export const readHandlers = {
   getrows: {
     need: 'view',
     async run({ db, user }) {
-      const rows = await stockScoped(db, user, true);
-      const m = dimMaps(rows);
-      const g = (n, r, c) => m[n].remap.get(num(r[c]));
-      return rows.map((r) => [g('cab', r, 'i_cab'), g('bas', r, 'i_bas'), g('as', r, 'i_as'), g('tk', r, 'i_tk'),
-        g('ds', r, 'i_ds'), g('jn', r, 'i_jn'), num(r.qty), rnd(r.qpd, 2), g('md', r, 'i_md')]);
+      return stockNumericRows(db, user);
     },
   },
 
