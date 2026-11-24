@@ -13,7 +13,7 @@ import { isPusat } from './auth.js';
 
 const TTL_BUCKET_MS = 6 * 3600 * 1000;
 // Naikkan angka ini setiap kali BENTUK keluaran fungsi get* berubah (mis. menambah grup Rank BAM), supaya hasil lama di cache tidak dipakai.
-const CACHE_REV = '4';
+const CACHE_REV = '5';
 const MEM = new Map();            // kunci -> teks JSON (urutan masuk = urutan paling lama dulu)
 let memBytes = 0;
 const MEM_MAX_BYTES = 24 * 1024 * 1024;

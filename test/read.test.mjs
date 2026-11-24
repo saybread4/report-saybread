@@ -242,7 +242,7 @@ test('fungsi baru terdaftar dengan hak akses yang sah', () => {
   assert.equal(handlers.adminrefresh.need, 'edit');
 });
 
-test('Rank KOORBAM (grup bam): hanya Koorbam, Admin Koorbam, Administrator, Admin Utama; jabatan lain tidak menerimanya', async () => {
+test('Rank BAM (grup bam): hanya Koorbam, Admin Koorbam, Administrator, Admin Utama; jabatan lain tidak menerimanya', async () => {
   const mk = () => mock([...common,
     [/^SELECT kode, toko, bam, bas, bastr, am, `as` AS as_ FROM toko/, [{ kode: 'T-1', toko: 'Toko 1', bam: 'BAM A', bas: 'Ani', bastr: '', am: 'Budi', as_: '' }]],
     [/^SELECT `key` AS k, val FROM rank_override/, []]]);

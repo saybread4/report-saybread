@@ -854,7 +854,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
   <!-- ===== Halaman Rank (Cabang, Cabang PNL, BAS, BASTR, AM, AS) ===== -->
   <section class="page on" id="pgRank">
     <div class="subbar">
-      <span class="seg big" id="rGrp"><button data-s="cab" class="on">Cabang</button><button data-s="pnl">Cabang PNL</button><button data-s="bam">KOORBAM</button><button data-s="bas">BAS</button><button data-s="bastr">BASTR</button><button data-s="am">AM</button><button data-s="as">AS</button></span>
+      <span class="seg big" id="rGrp"><button data-s="cab" class="on">Cabang</button><button data-s="pnl">Cabang PNL</button><button data-s="bam">BAM</button><button data-s="bas">BAS</button><button data-s="bastr">BASTR</button><button data-s="am">AM</button><button data-s="as">AS</button></span>
       <div class="subtools">
         <div class="filters" id="fR" style="display:none;width:190px"></div>
         <select id="rBln" class="sel" title="Pilih bulan"></select>
@@ -3400,7 +3400,7 @@ function rankSelect(){
     .getRankCab(rkCabs(),TOKEN,false);
 }
 /* per[gi] = Map(tanggal 'yyyy-MM-dd' -> [SALES_QTY, SALES_RP, BA_RP, JML_TOKO, JML_TOKO_SALES>0]); last[bulan] = tanggal terakhir yang ada penjualannya */
-const GR=['cab','pnl','bam','bas','bastr','am','as'],GL={cab:'CABANG',pnl:'CAB PNL',bam:'KOORBAM',bas:'BAS',bastr:'BASTR',am:'AM',as:'AS'};
+const GR=['cab','pnl','bam','bas','bastr','am','as'],GL={cab:'CABANG',pnl:'CAB PNL',bam:'BAM',bas:'BAS',bastr:'BASTR',am:'AM',as:'AS'};
 function prepRD(r){
   const tot=new Map();
   const add=(m,x)=>{const d=r.dates[x[1]];let o=m.get(d);if(!o)m.set(d,o=[0,0,0,0,0]);o[0]+=x[2];o[1]+=x[3];o[2]+=x[4];if(x[5]>o[3])o[3]=x[5];o[4]+=x[6]};   // o[4] = jumlah toko yang SALES_QTY-nya > 0
@@ -3472,7 +3472,7 @@ function renderR(){
   if(!RD)return;
   {const one=rkOneCab(),pb=document.querySelector('#rGrp [data-s="pnl"]');if(pb)pb.style.display=one?'none':'';
    if(one&&RGRP==='pnl'){RGRP='cab';document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x.dataset.s==='cab'))}}
-  {const okB=!!(ME&&ME.can&&ME.can.rankbam),bb=document.querySelector('#rGrp [data-s="bam"]');   // Rank KOORBAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
+  {const okB=!!(ME&&ME.can&&ME.can.rankbam),bb=document.querySelector('#rGrp [data-s="bam"]');   // Rank BAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
    if(bb)bb.style.display=okB?'':'none';
    if(!okB&&RGRP==='bam'){RGRP='cab';document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x.dataset.s==='cab'))}}
   const g=RD[RGRP],gname=GL[RGRP];
