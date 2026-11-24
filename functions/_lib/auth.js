@@ -25,6 +25,9 @@ const FULL_ROLES = new Set(['ADMIN_PUSAT', 'ADMINISTRATOR']);
 // Berlaku untuk Admin Utama DAN Administrator.
 export const isPusat = (u) => FULL_ROLES.has(u.jabatan);
 export const isFullRole = (jabatan) => FULL_ROLES.has(jabatan);
+// Rank BAM (ditampilkan dengan label KOORBAM): hanya Koorbam, Admin Koorbam, Administrator, dan Admin Utama.
+const RANK_BAM_ROLES = new Set(['KOORBAM', 'ADMIN_KOORBAM', 'ADMINISTRATOR', 'ADMIN_PUSAT']);
+export const canRankBam = (u) => RANK_BAM_ROLES.has(u.jabatan);
 // Hanya Admin Utama (mis. mengubah Rank BAS, membuat/mengubah akun Admin Utama).
 export const isUtama = (u) => u.jabatan === 'ADMIN_PUSAT';
 
@@ -66,7 +69,7 @@ export function publicUser(u) {
     label: LABEL[u.jabatan] || u.jabatan,
     bam_scope: pusat ? null : parseScope(u.bam_scope),   // null = semua BAM
     must_change: Number(u.must_change) === 1,
-    can: { edit: can(u, 'edit'), users: can(u, 'pusat'), all: pusat, rank: isUtama(u) },
+    can: { edit: can(u, 'edit'), users: can(u, 'pusat'), all: pusat, rank: isUtama(u), rankbam: canRankBam(u) },
   };
 }
 

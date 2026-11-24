@@ -52,7 +52,7 @@ test('Administrator melihat semua area seperti Admin Utama; label Admin Utama', 
   assert.deepEqual(bamWhere(adm), { sql: '1=1', params: [] });
   assert.deepEqual(kodeWhere(adm), { sql: '1=1', params: [] });
   const p = publicUser({ nik: 'SAYBREAD', nama: 'Administrator', jabatan: 'ADMINISTRATOR', bam_scope: '["X"]', must_change: 0 });
-  assert.deepEqual([p.bam_scope, p.label, p.can], [null, 'Administrator', { edit: true, users: true, all: true, rank: false }]);
+  assert.deepEqual([p.bam_scope, p.label, p.can], [null, 'Administrator', { edit: true, users: true, all: true, rank: false, rankbam: true }]);
   const u = publicUser({ nik: '1', nama: 'n', jabatan: 'ADMIN_PUSAT', bam_scope: null, must_change: 0 });
   assert.deepEqual([u.label, u.can.rank], ['Admin Utama', true]);
 });

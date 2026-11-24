@@ -12,6 +12,8 @@ import { sha256Hex } from './security.js';
 import { isPusat } from './auth.js';
 
 const TTL_BUCKET_MS = 6 * 3600 * 1000;
+// Naikkan angka ini setiap kali BENTUK keluaran fungsi get* berubah (mis. menambah grup Rank BAM), supaya hasil lama di cache tidak dipakai.
+const CACHE_REV = '4';
 const MEM = new Map();            // kunci -> teks JSON (urutan masuk = urutan paling lama dulu)
 let memBytes = 0;
 const MEM_MAX_BYTES = 24 * 1024 * 1024;
@@ -30,7 +32,7 @@ export async function dataVersion(db) {
 
 export async function cacheKey(fn, a, user, version) {
   const scope = isPusat(user) ? 'ALL' : [user.jabatan, ...(user.bam_scope || [])].join('|');
-  return sha256Hex(JSON.stringify([fn, a, scope, version, Math.floor(Date.now() / TTL_BUCKET_MS)]));
+  return sha256Hex(JSON.stringify([CACHE_REV, fn, a, scope, version, Math.floor(Date.now() / TTL_BUCKET_MS)]));
 }
 
 function memPut(key, text) {

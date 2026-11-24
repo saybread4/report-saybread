@@ -48,7 +48,7 @@ test('Administrator: masuk dengan username huruf kecil, hak penuh seperti Admin 
   const { db, adm, utama } = await setup();
   const r = await doLogin(db, 'saybread', 'Benar1234');
   const j = await J(r);
-  assert.deepEqual([j.user.label, j.user.bam_scope, j.user.can], ['Administrator', null, { edit: true, users: true, all: true, rank: false }]);
+  assert.deepEqual([j.user.label, j.user.bam_scope, j.user.can], ['Administrator', null, { edit: true, users: true, all: true, rank: false, rankbam: true }]);
   const g = await run(users.handleGet, { request: req('/api/admin/users', { method: 'GET', cookie: adm }), env }, db);
   assert.equal(g.status, 200);
   assert.ok(utama);

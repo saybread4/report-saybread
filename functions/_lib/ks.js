@@ -95,7 +95,7 @@ export async function overrides(db, table) {
 
 // Peta nama toko -> bas (dll.) dari tabel toko, kunci norm(kode).
 export async function tokoMap(db) {
-  const rows = await queryAll(db, 'SELECT kode, toko, bas, bastr, am, `as` AS as_ FROM toko', [], 'kode, toko');
+  const rows = await queryAll(db, 'SELECT kode, toko, bam, bas, bastr, am, `as` AS as_ FROM toko', [], 'kode, toko');
   const m = new Map();
   for (const r of rows) { const k = norm(r.kode); if (k && !m.has(k)) m.set(k, r); }
   return m;

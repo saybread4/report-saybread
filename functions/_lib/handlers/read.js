@@ -1,6 +1,6 @@
 // Fungsi baca yang dipindah dari Supabase (api_get*). Bentuk hasil SAMA dengan fungsi lama;
 // yang berbeda: pembatasan area dilakukan di server (scopedKs / allowedNorm), bukan token browser.
-import { isPusat } from '../auth.js';
+import { isPusat, canRankBam } from '../auth.js';
 import { bamWhere } from '../scope.js';
 import { lastUpdated } from '../dataupdates.js';
 import { norm, nz, num } from '../util.js';
@@ -43,10 +43,13 @@ const DIM = [['cab', 'cab', 'i_cab'], ['bas', 'bas', 'i_bas'], ['as', 'as_', 'i_
 // hanya memetakan ulang indeks; ini memangkas memori/CPU Worker secara besar-besaran pada tabel stock yang ratusan ribu baris
 // (batas memori Cloudflare yang terlampaui membuat SEMUA permintaan yang sedang berjalan gagal dengan HTTP 503).
 async function stockScoped(db, user, light = false) {
+  // mv_stock_idx bisa >10.000 baris (ratusan toko x puluhan item); driver memotong di 10.000 TANPA galat sehingga sebagian toko hilang
+  // dari halaman Stock. Dibaca per halaman lewat queryAll dengan urutan tetap.
   const [rows, ok] = await Promise.all([
-    db.query(light
+    queryAll(db, light
       ? 'SELECT kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx'
-      : 'SELECT kode, deskripsi, cab, bas, as_, tk, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx'),
+      : 'SELECT kode, deskripsi, cab, bas, as_, tk, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx',
+      [], 'kode, i_jn, i_ds, i_md, qty'),
     allowedNorm(db, user),
   ]);
   const keep = ok === null ? rows : rows.filter((r) => ok.has(norm(r.kode)));
@@ -102,7 +105,7 @@ function storeRows(d, toko) {
 // ---- Rank: penjumlahan per grup & tanggal ------------------------------------------------------
 // Dikerjakan di DATABASE (GROUP BY), jadi yang dikirim ke server hanya ribuan baris ringkasan, bukan ratusan ribu
 // baris harian. Toko dicocokkan lewat kode persis (mv_ks) dan atribut BAS/BASTR/AM/AS lewat norm(kode).
-const RANK_G = ['cab', 'pnl', 'bas', 'bastr', 'am', 'as'];
+const RANK_G = ['cab', 'pnl', 'bam', 'bas', 'bastr', 'am', 'as'];
 const rankLabel = (c) => `CASE WHEN ${c} IS NULL OR TRIM(${c}) IN ('', '0') THEN '(kosong)' ELSE TRIM(${c}) END`;
 
 async function rankAggSql(db, user, G, names, dt, wantNorm) {
@@ -116,12 +119,12 @@ async function rankAggSql(db, user, G, names, dt, wantNorm) {
   // Atribut tiap toko (label cabang/PNL/BAS/...) dihitung SEKALI per toko di tabel turunan `s` (~12 ribu baris), lalu digabung ke mv_tgl
   // dengan kode persis. Dulu norm(kode) (REGEXP) dihitung untuk setiap baris harian (ratusan ribu x 6 query) -> sangat berat dan rawan gagal/timeout.
   const stores = `SELECT k.kode AS kode, ${rankLabel('k.cabang')} AS cab, ${rankLabel('k.cabpnl')} AS pnl,
-        ${rankLabel('o.bas')} AS bas, ${rankLabel('o.bastr')} AS bastr, ${rankLabel('o.am')} AS am, ${rankLabel('o.as_')} AS as_
+        ${rankLabel('o.bam')} AS bam, ${rankLabel('o.bas')} AS bas, ${rankLabel('o.bastr')} AS bastr, ${rankLabel('o.am')} AS am, ${rankLabel('o.as_')} AS as_
       FROM mv_ks k
-      LEFT JOIN (SELECT ${NORM('kode')} AS nk, MIN(bas) AS bas, MIN(bastr) AS bastr, MIN(am) AS am, MIN(\`as\`) AS as_
+      LEFT JOIN (SELECT ${NORM('kode')} AS nk, MIN(bam) AS bam, MIN(bas) AS bas, MIN(bastr) AS bastr, MIN(am) AS am, MIN(\`as\`) AS as_
                    FROM toko GROUP BY ${NORM('kode')}) o ON o.nk = ${NORM('k.kode')}
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
-  const col = { cab: 'cab', pnl: 'pnl', bas: 'bas', bastr: 'bastr', am: 'am', as: 'as_' };
+  const col = { cab: 'cab', pnl: 'pnl', bam: 'bam', bas: 'bas', bastr: 'bastr', am: 'am', as: 'as_' };
   const sql = (g) => `SELECT s.${col[g]} AS grp, t.tanggal AS tgl, SUM(t.qty) AS q, SUM(t.rp) AS rp, SUM(t.barp) AS b,
         COUNT(*) AS n, SUM(CASE WHEN t.qty > 0 THEN 1 ELSE 0 END) AS nq
       FROM mv_tgl t
@@ -129,7 +132,7 @@ async function rankAggSql(db, user, G, names, dt, wantNorm) {
      WHERE t.tanggal >= ? AND t.tanggal <= ?
      GROUP BY s.${col[g]}, t.tanggal`;
   // TiDB Serverless membatalkan query yang memakai memori terlalu besar (error 8176), dan Cloudflare membatasi jumlah subrequest per permintaan.
-  // Jadi: query dijalankan BERURUTAN (bukan serentak), dipecah menjadi paling banyak 4 rentang tanggal => paling banyak 6 x 4 = 24 query.
+  // Jadi: query dijalankan BERURUTAN (bukan serentak), dipecah menjadi paling banyak 4 rentang tanggal => paling banyak 7 x 4 = 28 query.
   const days = dt.list, nw = Math.min(4, Math.max(1, Math.ceil(days.length / 16))), size = Math.max(1, Math.ceil(days.length / nw));
   const wins = [];
   for (let i = 0; i < days.length; i += size) wins.push([days[i], days[Math.min(i + size, days.length) - 1]]);
@@ -466,7 +469,7 @@ export const readHandlers = {
       const want = new Set(wantRaw.map(norm));
       const [ks, tk, dt] = await Promise.all([scopedKs(db, user), tokoMap(db), datesInfo(db)]);
       const lab = (x) => (nz(x) === '' ? '(kosong)' : nz(x));
-      const G = ['cab', 'pnl', 'bas', 'bastr', 'am', 'as'];
+      const G = canRankBam(user) ? RANK_G : RANK_G.filter((g) => g !== 'bam');   // grup BAM hanya untuk Koorbam / Admin Koorbam / Administrator / Admin Utama
       const stores = [];
       for (const v of ks) {
         if (!(allsc || want.has(norm(v.cabang)))) continue;
@@ -474,7 +477,7 @@ export const readHandlers = {
         stores.push({
           ki: v.ki, kode: v.kode,
           g: { cab: v.cabang === '' ? '(kosong)' : v.cabang, pnl: v.cabpnl === '' ? '(kosong)' : v.cabpnl,
-            bas: lab(t.bas), bastr: lab(t.bastr), am: lab(t.am), as: lab(t.as_) },
+            bam: lab(t.bam), bas: lab(t.bas), bastr: lab(t.bastr), am: lab(t.am), as: lab(t.as_) },
         });
       }
       // indeks nama per dimensi: urut (ki terkecil, nama)

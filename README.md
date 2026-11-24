@@ -1,6 +1,11 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
-Status: **tahap 1i — hemat Request Units (RU)**. Tes: `node --test "test/*.test.mjs"` (112 tes; 1 tes lama gagal karena `migrasi-1e.sql` tidak ikut di zip, bukan karena perubahan ini).
+Status: **tahap 1j — Rank BAM, perbaikan Stock >10.000 baris, hemat RU**. Tes: `node --test "test/*.test.mjs"` (112 tes; 1 tes lama gagal karena `migrasi-1e.sql` tidak ikut di zip, bukan karena perubahan ini).
+
+## Tahap 1j
+- **Rank KOORBAM** (grup `bam`, label KOORBAM): tombol di halaman Rank tepat sebelum BAS (juga sheet Excel "Rank KOORBAM"). Hanya untuk jabatan KOORBAM, ADMIN_KOORBAM, ADMINISTRATOR, ADMIN_PUSAT (`canRankBam` di `auth.js`, `can.rankbam` untuk tampilan). Jabatan lain (BAM, BAS, BASTR) tidak menerima grup ini dari server dan querynya tidak dijalankan. Dikelompokkan dari kolom `toko.bam`. Rank kini 7 grup x maks 4 rentang tanggal = maks 28 query (hasilnya di-cache).
+- **Stock**: `mv_stock_idx` kini dibaca per halaman (`queryAll`). Sebelumnya `db.query` memotong diam-diam di 10.000 baris sehingga sebagian toko tidak muncul.
+- `CACHE_REV` di `readcache.js`: naikkan setiap bentuk keluaran fungsi `get*` berubah.
 
 ## Tahap 1i — hemat RU TiDB Cloud (kuota gratis Starter: 50 juta RU / bulan / instance)
 **Tidak ada migrasi SQL.** Tabel `mv_meta` dibuat otomatis saat refresh pertama. Cukup deploy.

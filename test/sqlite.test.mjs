@@ -71,12 +71,12 @@ function expected(data, user, wantCab) {
   const allowed = new Set(data.toko.filter((t) => ['ADMIN_PUSAT', 'ADMINISTRATOR'].includes(user.jabatan) || bam.has(t.bam)).map((t) => norm(t.kode)));
   const lab = (x) => (nz(x) === '' ? '(kosong)' : nz(x));
   const tokoBy = new Map(data.toko.map((t) => [norm(t.kode), t]));
-  const res = { cab: new Map(), pnl: new Map(), bas: new Map(), bastr: new Map(), am: new Map(), as: new Map() };
+  const res = { cab: new Map(), pnl: new Map(), bam: new Map(), bas: new Map(), bastr: new Map(), am: new Map(), as: new Map() };
   const sel = new Map(data.ks.filter((k) => allowed.has(norm(k.kode)) && (!wantCab || wantCab.map(norm).includes(norm(k.cabang)))).map((k) => [norm(k.kode), k]));
   for (const v of data.tgl) {
     const k = sel.get(norm(v.kode)); if (!k) continue;
     const t = tokoBy.get(norm(v.kode));
-    const g = { cab: k.cabang === '' ? '(kosong)' : k.cabang, pnl: k.cabpnl, bas: lab(t.bas), bastr: lab(t.bastr), am: lab(t.am), as: lab(t.as) };
+    const g = { cab: k.cabang === '' ? '(kosong)' : k.cabang, pnl: k.cabpnl, bam: lab(t.bam), bas: lab(t.bas), bastr: lab(t.bastr), am: lab(t.am), as: lab(t.as) };
     for (const [dim, name] of Object.entries(g)) {
       const key = name + '|' + v.tanggal;
       const x = res[dim].get(key) || { q: 0, rp: 0, b: 0, n: 0, nq: 0 };
@@ -89,14 +89,14 @@ function expected(data, user, wantCab) {
 // ubah keluaran handler menjadi peta yang sama dengan acuan
 function flatten(out) {
   const res = {};
-  for (const dim of ['cab', 'pnl', 'bas', 'bastr', 'am', 'as']) {
+  for (const dim of ['cab', 'pnl', 'bam', 'bas', 'bastr', 'am', 'as']) {
     res[dim] = new Map();
     for (const [gi, di, q, rp, b, n, nq] of out[dim].rows) res[dim].set(out[dim].names[gi] + '|' + out.dates[di], { q, rp, b, n, nq });
   }
   return res;
 }
 
-const users = { pusat: { jabatan: 'ADMIN_PUSAT', bam_scope: [] }, bamA: { jabatan: 'BAM', bam_scope: ['BAM A'] }, admin: { jabatan: 'ADMINISTRATOR', bam_scope: [] } };
+const users = { pusat: { jabatan: 'ADMIN_PUSAT', bam_scope: [] }, bamA: { jabatan: 'KOORBAM', bam_scope: ['BAM A'] }, admin: { jabatan: 'ADMINISTRATOR', bam_scope: [] } };
 
 for (const [nama, user] of Object.entries(users)) {
   test(`Rank (${nama}): hasil agregasi di database = perhitungan acuan, termasuk kode ber-spasi`, async () => {
@@ -360,7 +360,7 @@ test('gettanggalcab: 40 toko x 62 hari (2.480 baris) aman; 300 toko x 62 hari (1
 });
 
 
-test('Rank: 60 hari -> dipecah jadi rentang tanggal, berurutan, paling banyak 24 query; hasil lengkap semua tanggal', async () => {
+test('Rank: 60 hari -> dipecah jadi rentang tanggal, berurutan, paling banyak 28 query; hasil lengkap semua tanggal', async () => {
   const dates = [];
   for (let d = 0; d < 60; d++) dates.push(d < 31 ? `2026-10-${String(d + 1).padStart(2, '0')}` : `2026-11-${String(d - 30).padStart(2, '0')}`);
   const db = sqliteDb((raw) => {
@@ -375,5 +375,5 @@ test('Rank: 60 hari -> dipecah jadi rentang tanggal, berurutan, paling banyak 24
   assert.equal(out.cab.rows.length, 60);
   assert.equal(out.cab.rows.reduce((s, r) => s + r[3], 0), 60 * 300);
   assert.equal(maks, 1, 'query agregasi tidak boleh berjalan serentak');
-  assert.ok(db.log.filter((s) => /FROM mv_tgl t/.test(s)).length <= 24);
+  assert.ok(db.log.filter((s) => /FROM mv_tgl t/.test(s)).length <= 28);
 });

@@ -105,13 +105,13 @@ test('gethistory: agregat bulanan, dimensi, dan bulan berjalan', async () => {
 
 test('getrankcab: nama dan baris per dimensi, nama BAS dari tabel toko', async () => {
   const routes = [...common,
-    [/^SELECT kode, toko, bas, bastr, am, `as` AS as_ FROM toko/, [
-      { kode: 'T-1', toko: 'Toko 1', bas: 'Ani', bastr: '', am: 'Budi', as_: '' }, { kode: 'T-2', toko: 'Toko 2', bas: 'Ani', bastr: '', am: 'Budi', as_: '' }]],
+    [/^SELECT kode, toko, bam, bas, bastr, am, `as` AS as_ FROM toko/, [
+      { kode: 'T-1', toko: 'Toko 1', bam: 'BAM A', bas: 'Ani', bastr: '', am: 'Budi', as_: '' }, { kode: 'T-2', toko: 'Toko 2', bam: 'BAM A', bas: 'Ani', bastr: '', am: 'Budi', as_: '' }]],
     [/^SELECT `key` AS k, val FROM rank_override/, [{ k: 'BAS|Ani', val: '3' }]],
   ];
-  const r = await handlers.getrankcab.run({ db: mock(routes), user: bamA }, [[]]);
+  const r = await handlers.getrankcab.run({ db: mock(routes), user: { ...bamA, jabatan: 'KOORBAM' } }, [[]]);
   assert.deepEqual(r.cab.names, ['C1', 'C2']); assert.deepEqual(r.bas.names, ['Ani']);
-  assert.deepEqual(r.bastr.names, ['(kosong)']);
+  assert.deepEqual(r.bastr.names, ['(kosong)']); assert.deepEqual(r.bam.names, ['BAM A']);
   assert.deepEqual(r.bas.rows, [[0, 0, 10, 1000, 50, 2, 1], [0, 1, 0, 0, 0, 1, 0]].map((x, i) => i === 0 ? [0, 0, 30, 3000, 110, 2, 2] : x));
   assert.deepEqual(r.ovr, { 'BAS|Ani': 3 });
 });
@@ -240,4 +240,21 @@ test('fungsi baru terdaftar dengan hak akses yang sah', () => {
     'getmonitor', 'getmonitorcab', 'gettrend', 'gethistori', 'gethistory', 'getbudged', 'getbudovr', 'getgempar', 'getstockfd', 'getexcelfd'])
     assert.equal(handlers[k].need, 'view', k);
   assert.equal(handlers.adminrefresh.need, 'edit');
+});
+
+test('Rank KOORBAM (grup bam): hanya Koorbam, Admin Koorbam, Administrator, Admin Utama; jabatan lain tidak menerimanya', async () => {
+  const mk = () => mock([...common,
+    [/^SELECT kode, toko, bam, bas, bastr, am, `as` AS as_ FROM toko/, [{ kode: 'T-1', toko: 'Toko 1', bam: 'BAM A', bas: 'Ani', bastr: '', am: 'Budi', as_: '' }]],
+    [/^SELECT `key` AS k, val FROM rank_override/, []]]);
+  for (const jabatan of ['KOORBAM', 'ADMIN_KOORBAM', 'ADMINISTRATOR', 'ADMIN_PUSAT']) {
+    const r = await handlers.getrankcab.run({ db: mk(), user: { jabatan, bam_scope: jabatan.includes('KOORBAM') ? ['BAM A'] : null } }, [[]]);
+    assert.ok(r.bam, jabatan + ' harus menerima grup bam');
+  }
+  for (const jabatan of ['BAM', 'BAS', 'BASTR']) {
+    const d = mk();
+    const r = await handlers.getrankcab.run({ db: d, user: { jabatan, bam_scope: ['BAM A'] } }, [[]]);
+    assert.equal(r.bam, undefined, jabatan + ' tidak boleh menerima grup bam');
+    assert.ok(r.bas && r.cab, 'grup lain tetap ada');
+    assert.ok(!d.calls.some((c) => /AS bam\b/.test(c.s) && /GROUP BY s\.bam/.test(c.s)), 'query grup bam tidak dijalankan');
+  }
 });
