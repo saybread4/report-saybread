@@ -315,3 +315,22 @@ test('gettanggalcab: 40 toko x 62 hari (2.480 baris) aman; 300 toko x 62 hari (1
   for (const row of r.rows) assert.equal(row[8], 300, 'tiap hari harus memuat semua 300 toko');
   assert.equal(r.rows.reduce((s, x) => s + x[3], 0), 300 * 62 * 2);
 });
+
+
+test('Rank: 60 hari -> dipecah jadi rentang tanggal, berurutan, paling banyak 24 query; hasil lengkap semua tanggal', async () => {
+  const dates = [];
+  for (let d = 0; d < 60; d++) dates.push(d < 31 ? `2026-10-${String(d + 1).padStart(2, '0')}` : `2026-11-${String(d - 30).padStart(2, '0')}`);
+  const db = sqliteDb((raw) => {
+    ins(raw, 'toko', [{ kode: 'G1', toko: 'T', cab_pnl: 'P', cabang: 'SBY', bam: 'BAM A', bas: 'B', bastr: 'S', am: 'A', as: 'X' }]);
+    ins(raw, 'mv_ks', [{ ki: 0, kode: 'G1', toko: 'T', cabang: 'SBY', cabpnl: 'P' }]);
+    ins(raw, 'mv_dates', dates.map((tanggal, di) => ({ tanggal, di })));
+    ins(raw, 'mv_tgl', dates.map((tanggal) => ({ kode: 'G1', tanggal, stock_qty: 0, prod: 1, qty: 3, rp: 300, mg: 0, baq: 0, barp: 0 })));
+  });
+  let aktif = 0, maks = 0; const real = db.query;
+  db.query = async (sql, a) => { if (/FROM mv_tgl t/.test(sql)) { aktif++; maks = Math.max(maks, aktif); await new Promise((r) => setTimeout(r, 1)); aktif--; } return real(sql, a); };
+  const out = await handlers.getrankcab.run({ db, user: users.pusat }, [[]]);
+  assert.equal(out.cab.rows.length, 60);
+  assert.equal(out.cab.rows.reduce((s, r) => s + r[3], 0), 60 * 300);
+  assert.equal(maks, 1, 'query agregasi tidak boleh berjalan serentak');
+  assert.ok(db.log.filter((s) => /FROM mv_tgl t/.test(s)).length <= 24);
+});

@@ -126,19 +126,28 @@ async function rankAggSql(db, user, G, names, dt, wantNorm) {
         COUNT(*) AS n, SUM(CASE WHEN t.qty > 0 THEN 1 ELSE 0 END) AS nq
       FROM mv_tgl t
       JOIN (${stores}) s ON s.kode = t.kode
+     WHERE t.tanggal >= ? AND t.tanggal <= ?
      GROUP BY s.${col[g]}, t.tanggal`;
+  // TiDB Serverless membatalkan query yang memakai memori terlalu besar (error 8176), dan Cloudflare membatasi jumlah subrequest per permintaan.
+  // Jadi: query dijalankan BERURUTAN (bukan serentak), dipecah menjadi paling banyak 4 rentang tanggal => paling banyak 6 x 4 = 24 query.
+  const days = dt.list, nw = Math.min(4, Math.max(1, Math.ceil(days.length / 16))), size = Math.max(1, Math.ceil(days.length / nw));
+  const wins = [];
+  for (let i = 0; i < days.length; i += size) wins.push([days[i], days[Math.min(i + size, days.length) - 1]]);
   const agg = {};
-  await Promise.all(G.map(async (g) => {
-    const m = new Map();
-    let rows = await db.query(sql(g), params);
-    if (rows.length >= 10000) rows = await queryAll(db, sql(g), params, 'grp, tgl');   // hasil mungkin terpotong di 10.000 baris: baca ulang per halaman
-    for (const r of rows) {
-      const gi = names[g].get(r.grp), di = dt.di.get(ymd(r.tgl));
-      if (gi === undefined || di === undefined) continue;
-      m.set(gi * 100000 + di, [gi, di, num(r.q), num(r.rp), num(r.b), num(r.n), num(r.nq)]);
+  for (const g of G) agg[g] = new Map();
+  for (const g of G) {
+    for (const w of wins) {
+      let rows;
+      try { rows = await db.query(sql(g), [...params, w[0], w[1]]); }
+      catch (e) { await new Promise((r) => setTimeout(r, 700)); rows = await db.query(sql(g), [...params, w[0], w[1]]); }   // sekali ulang bila TiDB sedang sibuk
+      if (rows.length >= 10000) rows = await queryAll(db, sql(g), [...params, w[0], w[1]], 'grp, tgl');   // hasil mungkin terpotong di 10.000 baris
+      for (const r of rows) {
+        const gi = names[g].get(r.grp), di = dt.di.get(ymd(r.tgl));
+        if (gi === undefined || di === undefined) continue;
+        agg[g].set(gi * 100000 + di, [gi, di, num(r.q), num(r.rp), num(r.b), num(r.n), num(r.nq)]);
+      }
     }
-    agg[g] = m;
-  }));
+  }
   return agg;
 }
 
@@ -486,6 +495,8 @@ export const readHandlers = {
         agg = await rankAggSql(db, user, G, names, dt, wantNorm);
       } catch (e) {                                   // jaga-jaga: bila SQL agregasi gagal, pakai cara lama (lebih berat)
         console.error('agregasi Rank di database gagal, memakai cara lama', e);
+        // Cara lama butuh ratusan permintaan ke database: hanya masuk akal untuk cakupan kecil. Untuk cakupan besar tampilkan galat aslinya.
+        if (stores.length > 1500) throw new Error('Rank gagal: ' + String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 280));
         try { agg = await rankAggJs(db, stores, G, names, dt); }
         catch (e2) { throw new Error('Rank gagal. SQL agregasi: ' + String((e && e.message) || e).slice(0, 200) + ' | cara lama: ' + String((e2 && e2.message) || e2).slice(0, 120)); }
       }
