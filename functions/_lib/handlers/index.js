@@ -3,6 +3,7 @@
 //
 import { bamWhere } from '../scope.js';
 import { norm, nz, num } from '../util.js';
+import { queryAll } from '../ks.js';
 import { readHandlers } from './read.js';
 import { refreshHandlers } from './refresh.js';
 import { adminHandlers } from './admin.js';
@@ -15,8 +16,8 @@ const baseHandlers = {
     need: 'view',
     async run({ db, user }) {
       const w = bamWhere(user, 'bam');
-      const rows = await db.query(
-        `SELECT kode, bas, bastr, am, \`as\` AS as_, wilayah, domain, kriteria FROM toko WHERE ${w.sql}`, w.params);
+      const rows = await queryAll(db,
+        `SELECT kode, bas, bastr, am, \`as\` AS as_, wilayah, domain, kriteria FROM toko WHERE ${w.sql}`, w.params, 'kode');
       const m = {};
       for (const r of rows) {
         const k = norm(r.kode);
@@ -31,7 +32,7 @@ const baseHandlers = {
     need: 'view',
     async run({ db, user }) {
       const w = bamWhere(user, 'bam');
-      const rows = await db.query(`SELECT bam, cabang FROM toko WHERE ${w.sql}`, w.params);
+      const rows = await queryAll(db, `SELECT bam, cabang FROM toko WHERE ${w.sql}`, w.params, 'bam, cabang');
       const pairs = rows.map((r) => [nz(r.bam), nz(r.cabang)]).filter(([b, c]) => b && c);
       const bams = [...new Set(pairs.map((p) => p[0]))].sort(byText);
       const cabs = [...new Set(pairs.map((p) => p[1]))].sort(byText);

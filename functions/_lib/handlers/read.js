@@ -5,7 +5,7 @@ import { bamWhere } from '../scope.js';
 import { lastUpdated } from '../dataupdates.js';
 import { norm, nz, num } from '../util.js';
 import {
-  arr, str, ymd, NORM, inList, rnd, chunks, allowedNorm, scopedKs, datesInfo, tglRows, overrides, tokoMap,
+  arr, str, ymd, NORM, inList, rnd, chunks, queryAll, allowedNorm, scopedKs, datesInfo, tglRows, overrides, tokoMap,
 } from '../ks.js';
 
 const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -73,7 +73,7 @@ function dimMaps(rows) {
 // Toko dalam area pengguna, langsung dari tabel toko.
 async function tokoScoped(db, user) {
   const w = bamWhere(user, 'bam');
-  return db.query(`SELECT kode, toko, bas, bastr, am, \`as\` AS as_, cabang FROM toko WHERE ${w.sql}`, w.params);
+  return queryAll(db, `SELECT kode, toko, bas, bastr, am, \`as\` AS as_, cabang FROM toko WHERE ${w.sql}`, w.params, 'kode, toko');
 }
 
 // Tambahkan toko dari tabel toko ke kamus d (cab/bas/as/tk) dan kembalikan satu baris per toko: [cab, bas, as, tk].
@@ -122,10 +122,11 @@ async function rankAggSql(db, user, G, names, dt, wantNorm) {
                    FROM toko GROUP BY ${NORM('kode')}) o ON o.nk = ${NORM('k.kode')}
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      GROUP BY grp, tgl`;
+  const ORD = 'grp, tgl';
   const agg = {};
   await Promise.all(G.map(async (g) => {
     const m = new Map();
-    for (const r of await db.query(sql(g), params)) {
+    for (const r of await queryAll(db, sql(g), params, ORD)) {
       const gi = names[g].get(r.grp), di = dt.di.get(ymd(r.tgl));
       if (gi === undefined || di === undefined) continue;
       m.set(gi * 100000 + di, [gi, di, num(r.q), num(r.rp), num(r.b), num(r.n), num(r.nq)]);
@@ -242,7 +243,7 @@ export const readHandlers = {
       const bamN = norm(a[0]);
       const empty = { tgl: null, awal: null, akhir: null, items: [], stores: [], cells: [] };
       if (!isPusat(user) && !(user.bam_scope || []).map(norm).includes(bamN)) return empty;
-      const toko = await db.query('SELECT kode, toko, cabang, cab_pnl, bam FROM toko');
+      const toko = await queryAll(db, 'SELECT kode, toko, cabang, cab_pnl, bam FROM toko', [], 'kode, toko');
       const t = toko.filter((r) => norm(r.bam) === bamN)
         .map((r) => ({ kode: r.kode, toko: nz(r.toko), cabang: nz(r.cabang), pnl: nz(r.cab_pnl) }));
       const mx = (await db.query('SELECT MAX(tanggal) AS d FROM stock'))[0];
@@ -411,7 +412,7 @@ export const readHandlers = {
       const dz = [];
       for (const part of chunks(kodes, 500)) {
         const w = inList('kode', part);
-        for (const st of await db.query(`SELECT tanggal, kode, sales_qty FROM sales_toko WHERE ${w.sql}`, w.params)) {
+        for (const st of await queryAll(db, `SELECT tanggal, kode, sales_qty FROM sales_toko WHERE ${w.sql}`, w.params, 'kode, tanggal')) {
           const d = ymd(st.tanggal), di = dt.di.get(d); if (di === undefined) continue;
           const p = parts(d);
           const c = sel.get(`${st.kode}|${p.y}|${p.m}|closing`); if (!c) continue;

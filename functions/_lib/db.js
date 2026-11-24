@@ -10,7 +10,10 @@ export async function getDb(env) {
     // SELECT -> array baris (objek)
     async query(sql, args = []) {
       const r = await conn.execute(sql, args);
-      return Array.isArray(r) ? r : (r && r.rows) || [];
+      const rows = Array.isArray(r) ? r : (r && r.rows) || [];
+      // Driver memotong hasil di 10.000 baris tanpa galat. Gunakan queryAll() (ks.js) untuk query yang bisa lebih besar.
+      if (rows.length === 10000) console.error('PERINGATAN: hasil tepat 10000 baris, kemungkinan terpotong:', String(sql).replace(/\s+/g, ' ').slice(0, 160));
+      return rows;
     },
     // INSERT / UPDATE / DELETE
     async exec(sql, args = []) {

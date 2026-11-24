@@ -291,3 +291,27 @@ test('refresh langkah ringan (tanggal/toko/bulan): gagal di tengah -> isi lama t
   await assert.rejects(db.run(0), /503/);
   assert.deepEqual(rowsOf(db, 'SELECT * FROM mv_dates'), before);
 });
+
+
+// ---- Driver TiDB memotong hasil di 10.000 baris: pembacaan besar harus dipaginasi ------------------------------
+test('gettanggalcab: 40 toko x 62 hari (2.480 baris) aman; 300 toko x 62 hari (18.600 baris) tetap lengkap walau driver memotong di 10.000', async () => {
+  const db = sqliteDb((raw) => {
+    const toko = [], ks = [], tgl = [], dates = [];
+    for (let d = 0; d < 62; d++) dates.push(d < 31 ? `2026-10-${String(d + 1).padStart(2, '0')}` : `2026-11-${String(d - 30).padStart(2, '0')}`);
+    for (let i = 0; i < 300; i++) {
+      const kode = 'G' + String(1000 + i);
+      toko.push({ kode, toko: 'T' + i, cab_pnl: 'P1', cabang: 'SBY', bam: 'BAM A' });
+      ks.push({ ki: i, kode, toko: 'T' + i, cabang: 'SBY', cabpnl: 'P1' });
+      for (const d of dates) tgl.push({ kode, tanggal: d, stock_qty: 0, prod: 1, qty: 2, rp: 100, mg: 0, baq: 0, barp: 0 });
+    }
+    ins(raw, 'toko', toko); ins(raw, 'mv_ks', ks); ins(raw, 'mv_tgl', tgl);
+    ins(raw, 'mv_dates', dates.map((tanggal, di) => ({ tanggal, di })));
+  });
+  const real = db.query;
+  db.query = async (sql, a = []) => (await real(sql, a)).slice(0, 10000);        // meniru pemotongan driver
+  const r = await handlers.gettanggalcab.run({ db, user: users.pusat }, [[], []]);
+  assert.equal(r.ns, 300);
+  assert.equal(r.rows.length, 62, 'semua 62 tanggal harus ada, termasuk 23 November dan seterusnya');
+  for (const row of r.rows) assert.equal(row[8], 300, 'tiap hari harus memuat semua 300 toko');
+  assert.equal(r.rows.reduce((s, x) => s + x[3], 0), 300 * 62 * 2);
+});

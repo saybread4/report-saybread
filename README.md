@@ -3,6 +3,12 @@
 Status: **tahap 1f — Perbarui Dashboard bertahap, Administrator tidak melihat Admin Utama, chip Muat ulang & cakupan dihapus**.
 Tes otomatis (101 tes; sebagian dijalankan terhadap SQLite sungguhan, bukan hanya tiruan): `node --test "test/*.test.mjs"`.
 
+## Tahap 1h — hasil query dipotong di 10.000 baris
+Driver TiDB memotong setiap SELECT di **10.000 baris tanpa pesan galat**. Akibatnya Perform Cabang berhenti di tengah (mis. 26 Okt, atau 6 Nov) walau
+`sales_toko` dan `mv_tgl` lengkap. Semua pembacaan yang bisa besar kini lewat `queryAll()` (`functions/_lib/ks.js`): per halaman 9.000 baris dengan ORDER BY tetap.
+Pembacaan baru yang bisa >10.000 baris WAJIB memakai `queryAll()`. `db.query` mencatat PERINGATAN di log bila hasilnya tepat 10.000 baris.
+Belum dipaginasi: `mv_stock_idx` (halaman Stock) dan beberapa query agregat kecil; cek `SELECT COUNT(*) FROM mv_stock_idx;`.
+
 ## Tahap 1g — Perbarui Dashboard aman & pembacaan lebih ringan
 **Tidak ada migrasi SQL.** Cukup deploy.
 
