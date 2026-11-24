@@ -141,7 +141,7 @@ test('refresh: TRUNCATE lalu isi ulang; langkah berat dipecah per bulan (dan per
   // langkah 4: 3 bulan x 4 bagian = 12 potongan; TRUNCATE hanya di potongan pertama
   const d2 = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 0 }, { mi: 1 }, { mi: 2 }]]]);
   let sub = 0, n = 0;
-  do { const r = await refreshStep(d2, 4, sub); assert.equal(r.total, 12); sub = r.next; n++; } while (sub != null);
+  do { const r = await refreshStep(d2, 4, sub, true); assert.equal(r.total, 12); sub = r.next; n++; } while (sub != null);
   assert.equal(n, 12);
   assert.equal(d2.calls.filter((c) => /^TRUNCATE TABLE mv_mon_rows$/.test(c.s)).length, 1);
   const ins = d2.calls.filter((c) => /^INSERT INTO mv_mon_rows/.test(c.s));
@@ -183,6 +183,48 @@ test('refresh: TRUNCATE lalu isi ulang; langkah berat dipecah per bulan (dan per
   const r = await handlers.adminrefresh.run({ db: mock([]) }, ['tok', 0]);
   assert.deepEqual([r.langkah, r.total, r.next, r.subTotal], [0, 7, null, 1]);
   assert.match(r.pesan, /^Dashboard diperbarui \d\d\/\d\d\/\d{4} \d\d:\d\d$/);
+});
+
+test('refresh inkremental: bulan/jendela yang sama dilewati, yang beda diganti; tanpa TRUNCATE', async () => {
+  const same = { prod: '1', qty: '2', rp: '3', baq: '4', barp: '5' };
+  // langkah 4: bulan 0 sama (dilewati), bulan 1 beda (hapus bulan itu lalu isi ulang 4 bagian)
+  const d = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 0 }, { mi: 1 }]],
+    [/FROM sales_item i JOIN mv_mon_list/, (s, a) => [same]],
+    [/FROM mv_mon_rows WHERE mi = \?/, (s, a) => [a[0] === 0 ? same : { ...same, qty: '99' }]]]);
+  let sub = 0, n = 0;
+  do { const r = await refreshStep(d, 4, sub); sub = r.next; n++; } while (sub != null);
+  assert.equal(n, 1 + 4, 'bulan 0 dilewati sekaligus (1 panggilan), bulan 1 = 4 potongan');
+  assert.equal(d.calls.filter((c) => /^TRUNCATE/.test(c.s)).length, 0);
+  assert.deepEqual(d.calls.filter((c) => /^DELETE FROM mv_mon_rows WHERE mi = \?/.test(c.s)).map((c) => c.a), [[1]]);
+  assert.deepEqual(d.calls.filter((c) => /^INSERT INTO mv_mon_rows/.test(c.s)).map((c) => c.a), [[1, 0], [1, 1], [1, 2], [1, 3]]);
+  assert.deepEqual(d.calls.filter((c) => /^DELETE FROM mv_mon_rows WHERE mi >= \?/.test(c.s)).map((c) => c.a), [[2]]);   // sisa bulan lama dibuang
+  // force = cara lama (TRUNCATE + semua potongan)
+  const df = mock([[/FROM mv_mon_list ORDER BY mi/, [{ mi: 0 }, { mi: 1 }]]]);
+  sub = 0; n = 0;
+  do { const r = await refreshStep(df, 4, sub, true); sub = r.next; n++; } while (sub != null);
+  assert.equal(n, 8); assert.equal(df.calls.filter((c) => /^TRUNCATE TABLE mv_mon_rows$/.test(c.s)).length, 1);
+
+  // langkah 3: jendela yang jumlahnya sama dengan sumber tidak ditulis ulang
+  const t = { n: 1, prod: 1, qty: 2, rp: 3, mg: 4, baq: 5, barp: 6, stock_qty: 7 };
+  const dt = mock([[/FROM sales_toko GROUP BY ym/, [{ ym: '2026-11' }]],
+    [/FROM sales_toko s LEFT JOIN/, [t]], [/FROM mv_tgl WHERE tanggal >= \? AND tanggal < \?/, (s, a) => [a[0] === '2026-11-11' ? { ...t, rp: 4 } : t]]]);
+  for (let k = 0; k < 3; k++) await refreshStep(dt, 3, k);
+  assert.deepEqual(dt.calls.filter((c) => /^INSERT INTO mv_tgl/.test(c.s)).map((c) => c.a[0]), ['2026-11-11'], 'hanya jendela yang beda yang diisi ulang');
+  const dtf = mock([[/FROM sales_toko GROUP BY ym/, [{ ym: '2026-11' }]], [/FROM sales_toko s LEFT JOIN/, [t]], [/FROM mv_tgl WHERE/, [t]]]);
+  for (let k = 0; k < 3; k++) await refreshStep(dtf, 3, k, true);
+  assert.equal(dtf.calls.filter((c) => /^INSERT INTO mv_tgl/.test(c.s)).length, 3, 'force: semua jendela');
+
+  // langkah 7 (stock): sidik jari sama -> dilewati; beda -> hitung ulang dan sidik jari baru disimpan setelah bagian terakhir
+  const meta = {};
+  const st = (fp) => mock([[/^CREATE TABLE IF NOT EXISTS mv_meta/, []], [/FROM stock WHERE tanggal = \(SELECT MAX\(tanggal\) FROM stock\)\) AS a/, [{ a: fp, b: '1', c: '1', d: '2026-11-02', e: '1' }]],
+    [/^SELECT v FROM mv_meta/, () => (meta.stock_fp == null ? [] : [{ v: meta.stock_fp }])]]);
+  const run6 = async (db) => { let s = 0, c = 0; do { const r = await refreshStep(db, 6, s); s = r.next; c++; } while (s != null); return c; };
+  const withMeta = (db) => { const e = db.exec; db.exec = async (sql, a = []) => { await e(sql, a); const x = sql.replace(/\s+/g, ' ').trim(); if (/^REPLACE INTO mv_meta/.test(x)) meta[a[0]] = a[1]; }; return db; };
+  const a1 = withMeta(st('A')); assert.equal(await run6(a1), 8); assert.equal(meta.stock_fp.startsWith('building:'), false, 'sidik jari sah setelah semua bagian selesai');
+  const a2 = withMeta(st('A')); assert.equal(await run6(a2), 1); assert.equal(a2.calls.filter((c) => /^(INSERT INTO mv_stock_idx|TRUNCATE)/.test(c.s)).length, 0, 'data sama: tidak ada tulis');
+  const a3 = withMeta(st('B')); assert.equal(await run6(a3), 8, 'data beda: hitung ulang');
+  const a4 = withMeta(st('B')); let s4 = 0; do { const r = await refreshStep(a4, 6, s4, true); s4 = r.next; } while (s4 != null);
+  assert.equal(a4.calls.filter((c) => /^INSERT INTO mv_stock_idx/.test(c.s)).length, 8, 'force: tetap hitung ulang walau sama');
 });
 
 test('refresh: kegagalan database ditampilkan lengkap (langkah, potongan, pesan asli) untuk administrator', async () => {

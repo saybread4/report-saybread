@@ -108,6 +108,61 @@ export const SQL = {
       ) b`
 };
 
+// ---- Pembanding "isi sama?" supaya potongan yang tidak berubah TIDAK ditulis ulang -------------------------------------
+// Tulis ke TiDB adalah bagian termahal (RU). Sebelum mengganti satu potongan, jumlah beberapa kolom di tabel sumber dibandingkan
+// dengan jumlah di tabel ringkasan; bila sama persis potongan dilewati. Tombol "Perbarui Dashboard" + Shift (force) memaksa hitung ulang penuh.
+const TGL_SRC = `SELECT COUNT(*) AS n, COALESCE(SUM(s.produksi), 0) AS prod, COALESCE(SUM(s.sales_qty), 0) AS qty, COALESCE(SUM(s.sales_rp), 0) AS rp,
+         COALESCE(SUM(s.margin), 0) AS mg, COALESCE(SUM(s.ba_qty), 0) AS baq, COALESCE(SUM(s.ba_rp), 0) AS barp, COALESCE(SUM(COALESCE(st.q, 0)), 0) AS stock_qty
+    FROM sales_toko s
+    LEFT JOIN (SELECT kode, tanggal, SUM(stock_total) AS q FROM stock_toko
+                WHERE UPPER(jenis) LIKE 'DOUGH%' AND tanggal >= ? AND tanggal < ? GROUP BY kode, tanggal) st
+      ON st.kode = s.kode AND st.tanggal = s.tanggal
+   WHERE s.tanggal >= ? AND s.tanggal < ?`;
+const TGL_DST = `SELECT COUNT(*) AS n, COALESCE(SUM(prod), 0) AS prod, COALESCE(SUM(qty), 0) AS qty, COALESCE(SUM(rp), 0) AS rp,
+         COALESCE(SUM(mg), 0) AS mg, COALESCE(SUM(baq), 0) AS baq, COALESCE(SUM(barp), 0) AS barp, COALESCE(SUM(stock_qty), 0) AS stock_qty
+    FROM mv_tgl WHERE tanggal >= ? AND tanggal < ?`;
+const MON_SRC = `SELECT COALESCE(SUM(i.produksi), 0) AS prod, COALESCE(SUM(i.sales_qty), 0) AS qty, COALESCE(SUM(i.sales_rp), 0) AS rp,
+         COALESCE(SUM(i.ba_qty), 0) AS baq, COALESCE(SUM(i.ba_rp), 0) AS barp
+    FROM sales_item i JOIN mv_mon_list mm ON mm.y = i.tahun AND mm.b = i.bulan WHERE i.ket = ? AND mm.mi = ?`;
+const monDst = (table) => `SELECT COALESCE(SUM(prod), 0) AS prod, COALESCE(SUM(qty), 0) AS qty, COALESCE(SUM(rp), 0) AS rp,
+         COALESCE(SUM(baq), 0) AS baq, COALESCE(SUM(barp), 0) AS barp FROM ${table} WHERE mi = ?`;
+
+// Sidik jari data sumber langkah stock. Bila sama dengan yang tersimpan di mv_meta, seluruh langkah (8 INSERT berat) dilewati.
+const STOCK_FP = `SELECT
+  (SELECT CONCAT_WS('|', MAX(tanggal), COUNT(*), COALESCE(SUM(stock_qty), 0), COALESCE(SUM(CRC32(CONCAT_WS('|', kode, plu, jenis, stock_qty))), 0))
+     FROM stock WHERE tanggal = (SELECT MAX(tanggal) FROM stock)) AS a,
+  (SELECT CONCAT_WS('|', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', kode, toko, cabang, bas, bastr, am, \`as\`))), 0)) FROM toko) AS b,
+  (SELECT CONCAT_WS('|', COUNT(*), COALESCE(SUM(CRC32(CONCAT_WS('|', kode, plu, modis))), 0)) FROM modis) AS c,
+  (SELECT MAX(tanggal) FROM sales_toko) AS d,
+  (SELECT CONCAT_WS('|', COUNT(*), COALESCE(SUM(sales_qty), 0)) FROM sales_item
+    WHERE ket = 'closing' AND tahun * 100 + bulan = (SELECT MAX(YEAR(tanggal) * 100 + MONTH(tanggal)) FROM sales_toko)) AS e`;
+
+const META_DDL = 'CREATE TABLE IF NOT EXISTS mv_meta (k VARCHAR(60) NOT NULL, v VARCHAR(600), PRIMARY KEY (k))';
+
+const close = (x, y) => Math.abs((Number(x) || 0) - (Number(y) || 0)) < 0.001;
+// true hanya bila KEDUA sisi berhasil dibaca dan semua kolomnya sama; bila ragu -> false (hitung ulang).
+const sameRow = (a, b) => !!a && !!b && Object.keys(a).length > 0 && Object.keys(a).every((k) => k in b && close(a[k], b[k]));
+async function same(db, srcSql, srcArgs, dstSql, dstArgs) {
+  try {
+    const a = (await db.query(srcSql, srcArgs))[0], b = (await db.query(dstSql, dstArgs))[0];
+    return sameRow(a, b);
+  } catch (e) { return false; }
+}
+async function metaGet(db, k) {
+  try { const r = await db.query('SELECT v FROM mv_meta WHERE k = ?', [k]); return r[0] ? String(r[0].v) : null; } catch (e) { return null; }
+}
+async function metaSet(db, k, v) {
+  try { await db.exec('REPLACE INTO mv_meta (k, v) VALUES (?, ?)', [k, v]); } catch (e) { /* tidak boleh menggagalkan refresh */ }
+}
+async function stockFingerprint(db) {
+  try {
+    const r = (await db.query(STOCK_FP))[0];
+    if (!r) return null;
+    const v = ['a', 'b', 'c', 'd', 'e'].map((k) => (r[k] == null ? '' : String(r[k]))).join('#');
+    return /[0-9]/.test(v) ? v : null;
+  } catch (e) { return null; }
+}
+
 const TABLES = ['mv_dates', 'mv_ks', 'mv_mon_list', 'mv_tgl', 'mv_mon_rows', 'mv_mon_same', 'mv_stock_idx'];
 
 const nextMonth = (ym) => {
@@ -136,7 +191,7 @@ export function tglWindows(months) {
 }
 
 // Menjalankan satu potongan dari satu langkah. Mengembalikan { next, total }: next = nomor potongan berikutnya (null = langkah selesai).
-export async function refreshStep(db, step, sub = 0) {
+export async function refreshStep(db, step, sub = 0, force = false) {
   if (!Number.isInteger(step) || step < 0 || step >= STEPS) throw Object.assign(new Error('Langkah tidak dikenal.'), { status: 400 });
   if (!Number.isInteger(sub) || sub < 0) sub = 0;
 
@@ -149,24 +204,46 @@ export async function refreshStep(db, step, sub = 0) {
     }
     const w = wins[sub];
     if (!w) return { next: null, total: wins.length };
+    const nxt = sub + 1 < wins.length ? sub + 1 : null;
+    if (!force && await same(db, TGL_SRC, [w[0], w[1], w[0], w[1]], TGL_DST, [w[0], w[1]])) return { next: nxt, total: wins.length };   // jendela ini tidak berubah: tidak ditulis ulang
     await atomic(db, async (t) => {
       await t.exec('DELETE FROM mv_tgl WHERE tanggal >= ? AND tanggal < ?', [w[0], w[1]]);
       await t.exec(SQL.tglMonth, [w[0], w[1], w[0], w[1]]);
     });
     return { next: sub + 1 < wins.length ? sub + 1 : null, total: wins.length };
   }
-  if (step === 4 || step === 5) {                           // item bulanan: satu bulan x satu bagian kode per potongan
+  if (step === 4 || step === 5) {                           // item bulanan: satu bulan x satu bagian kode per potongan; bulan yang tidak berubah dilewati
+    const table = TABLES[step], ket = step === 4 ? 'closing' : 'tgl_yang_sama';
     const months = (await db.query('SELECT mi FROM mv_mon_list ORDER BY mi')).map((r) => num(r.mi));
     const total = months.length * BUCKETS;
-    if (sub === 0) await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
+    if (sub === 0) {
+      if (force) await db.exec(`TRUNCATE TABLE ${table}`);
+      else await db.exec(`DELETE FROM ${table} WHERE mi >= ? OR mi < 0`, [months.length]);   // buang sisa bulan yang sudah tidak ada di daftar
+    }
     if (sub >= total) return { next: null, total };
-    await db.exec(step === 4 ? SQL.monRows : SQL.monSame, [months[Math.floor(sub / BUCKETS)], sub % BUCKETS]);
+    const m = Math.floor(sub / BUCKETS), bucket = sub % BUCKETS;
+    if (!force && bucket === 0) {
+      if (await same(db, MON_SRC, [ket, months[m]], monDst(table), [months[m]]))
+        return { next: (m + 1) * BUCKETS < total ? (m + 1) * BUCKETS : null, total };       // bulan ini tidak berubah: lewati keempat bagiannya
+      await db.exec(`DELETE FROM ${table} WHERE mi = ?`, [months[m]]);
+    }
+    await db.exec(step === 4 ? SQL.monRows : SQL.monSame, [months[m], bucket]);
     return { next: sub + 1 < total ? sub + 1 : null, total };
   }
   if (step === 6) {                                         // stock: dibagi per bagian kode agar query tetap ringan
-    if (sub === 0) await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
+    if (sub === 0) {
+      let fp = null;
+      try { await db.exec(META_DDL); fp = await stockFingerprint(db); } catch (e) { fp = null; }
+      if (!force && fp && (await metaGet(db, 'stock_fp')) === fp) return { next: null, total: 1 };   // data sumber sama dengan refresh terakhir: lewati
+      await metaSet(db, 'stock_fp', fp ? 'building:' + fp : '');
+      await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
+    }
     if (sub >= STOCK_BUCKETS) return { next: null, total: STOCK_BUCKETS };
     await db.exec(SQL.stockIdx(sub));
+    if (sub + 1 >= STOCK_BUCKETS) {                         // semua bagian selesai: tandai sidik jari sebagai sah
+      const v = await metaGet(db, 'stock_fp');
+      if (v && v.startsWith('building:')) await metaSet(db, 'stock_fp', v.slice(9));
+    }
     return { next: sub + 1 < STOCK_BUCKETS ? sub + 1 : null, total: STOCK_BUCKETS };
   }
   if (sub === 0) {                                          // langkah ringan: hapus + isi dalam satu transaksi (gagal -> isi lama tetap)
@@ -192,9 +269,10 @@ export const refreshHandlers = {
     async run({ db }, a) {
       const s = Number.parseInt(a[1], 10);
       const sub = Number.parseInt(a[2], 10) || 0;
+      const force = a[3] === 'full';                       // Shift+klik di tombol: hitung ulang penuh, tanpa melewati potongan yang tidak berubah
       let r;
       try {
-        r = await refreshStep(db, s, sub);
+        r = await refreshStep(db, s, sub, force);
       } catch (e) {
         if (e && e.status === 400) throw new HttpError(400, e.message);
         console.error('refresh gagal: langkah', s, 'potongan', sub, e);

@@ -249,11 +249,54 @@ for (const [step, tbl, ket] of [[4, 'mv_mon_rows', 'closing'], [5, 'mv_mon_same'
     assert.deepEqual(got, ref);
     const dupe = db.raw.prepare(`SELECT COUNT(*) n FROM (SELECT kode, ds, mi FROM ${tbl} GROUP BY kode, ds, mi HAVING COUNT(*) > 1)`).get().n;
     assert.equal(dupe, 0);                                                                      // tidak ada baris ganda antar-potongan
-    assert.equal(await db.run(step), 16);                                                       // diulang -> hasil tetap sama
+    assert.equal(await db.run(step), 4);                                                        // diulang: 4 bulan tidak berubah -> 4 panggilan (tiap bulan dilewati sekaligus)
     assert.deepEqual(rowsOf(db, `SELECT * FROM ${tbl}`), ref);
     if (step === 4) assert.ok(!got.some((r) => { const x = JSON.parse(r); return x[2] === 'Roti C' && x[4] === 0 && x[5] === 0 && x[6] === 0; }), 'baris semuanya nol harus dibuang (HAVING)');
   });
 }
+
+
+// ---- Refresh inkremental pada database sungguhan: yang tidak berubah tidak ditulis ulang, yang berubah diganti dengan benar ----
+const writes = (db, re) => db.log.filter((q) => re.test(q.replace(/\s+/g, ' ').trim())).length;
+for (const [step, tbl, ket] of [[4, 'mv_mon_rows', 'closing'], [5, 'mv_mon_same', 'tgl_yang_sama']]) {
+  test(`refresh inkremental ${tbl}: tanpa perubahan tidak menulis; satu bulan berubah -> hanya bulan itu diganti dan hasil = hitung penuh`, async () => {
+    const db = refreshDb();
+    await db.run(step);
+    const full = rowsOf(db, `SELECT * FROM ${tbl}`);
+    db.log.length = 0;
+    await db.run(step);
+    assert.equal(writes(db, new RegExp(`^INSERT INTO ${tbl}`)), 0, 'data sama: tidak ada INSERT');
+    assert.equal(writes(db, new RegExp(`^DELETE FROM ${tbl} WHERE mi = `)), 0);
+    assert.deepEqual(rowsOf(db, `SELECT * FROM ${tbl}`), full);
+    db.raw.exec(`UPDATE sales_item SET sales_qty = sales_qty + 7, sales_rp = sales_rp + 70 WHERE ket = '${ket}' AND tahun = 2026 AND bulan = 11`);
+    db.log.length = 0;
+    await db.run(step);
+    assert.equal(writes(db, new RegExp(`^INSERT INTO ${tbl}`)), 4, 'hanya satu bulan x 4 bagian yang diisi ulang');
+    const ref = refreshDb(); ref.raw.exec(`UPDATE sales_item SET sales_qty = sales_qty + 7, sales_rp = sales_rp + 70 WHERE ket = '${ket}' AND tahun = 2026 AND bulan = 11`);
+    await ref.run(step);
+    assert.deepEqual(rowsOf(db, `SELECT * FROM ${tbl}`), rowsOf(ref, `SELECT * FROM ${tbl}`), 'sama dengan hitung dari nol');
+  });
+}
+
+test('refresh inkremental mv_tgl: jendela tak berubah dilewati; perubahan satu hari hanya mengganti jendelanya', async () => {
+  const db = refreshDb();
+  await db.run(3);
+  db.log.length = 0;
+  await db.run(3);
+  assert.equal(writes(db, /^INSERT INTO mv_tgl/), 0, 'data sama: tidak ada INSERT');
+  const before = rowsOf(db, 'SELECT * FROM mv_tgl');
+  db.raw.exec("UPDATE sales_toko SET sales_rp = sales_rp + 500 WHERE tanggal = '2026-11-07'");
+  db.raw.exec("UPDATE stock_toko SET stock_total = stock_total + 1 WHERE tanggal = '2026-12-01' AND UPPER(jenis) LIKE 'DOUGH%'");
+  db.log.length = 0;
+  await db.run(3);
+  assert.equal(writes(db, /^INSERT INTO mv_tgl/), 2, 'hanya dua jendela (7 Nov dan 1 Des) yang diganti');
+  const ref = refreshDb();
+  ref.raw.exec("UPDATE sales_toko SET sales_rp = sales_rp + 500 WHERE tanggal = '2026-11-07'");
+  ref.raw.exec("UPDATE stock_toko SET stock_total = stock_total + 1 WHERE tanggal = '2026-12-01' AND UPPER(jenis) LIKE 'DOUGH%'");
+  await ref.run(3);
+  assert.deepEqual(rowsOf(db, 'SELECT * FROM mv_tgl'), rowsOf(ref, 'SELECT * FROM mv_tgl'));
+  assert.notDeepEqual(rowsOf(db, 'SELECT * FROM mv_tgl'), before);
+});
 
 
 // ---- Refresh harus AMAN: gagal di tengah tidak boleh menghilangkan data yang sudah ada ----------------------

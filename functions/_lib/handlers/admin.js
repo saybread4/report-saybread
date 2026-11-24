@@ -398,17 +398,19 @@ async function saveGempar(db, a) {            // [tok, tanggalLama, tanggalBaru]
   if (!o) {
     if (await ada(n)) throw bad(`Tanggal ${dmy(n)} sudah ada di tabel Gempar.`);
     await db.exec('INSERT INTO gempar (tanggal) VALUES (?)', [n]);
+    await touchUpdated(db, 'cache');
   } else {
     if (o !== n && (await ada(n))) throw bad(`Tanggal ${dmy(n)} sudah ada di tabel Gempar.`);
     if (!(await ada(o))) throw bad(`Tanggal ${dmy(o)} tidak ditemukan di tabel Gempar.`);
     await db.exec('UPDATE gempar SET tanggal = ? WHERE tanggal = ?', [n, o]);
+    await touchUpdated(db, 'cache');
   }
   return gemparDates(db);
 }
 
 async function deleteGempar(db, a) {          // [tok, tanggal] -> daftar tanggal
   const d = optDate(a[1]);
-  if (d) await db.exec('DELETE FROM gempar WHERE tanggal = ?', [d]);
+  if (d) { await db.exec('DELETE FROM gempar WHERE tanggal = ?', [d]); await touchUpdated(db, 'cache'); }
   return gemparDates(db);
 }
 
@@ -429,11 +431,13 @@ async function gemparSave(db, a) {            // [tok, id, tanggal, ket]
     if (/duplicate entry|\b1062\b/i.test(String(e && e.message))) throw new HttpError(409, 'Tanggal dan keterangan itu sudah ada.', 'DUP');
     throw e;
   }
+  await touchUpdated(db, 'cache');
   return true;
 }
 
 async function gemparDelete(db, a) {          // [tok, id]
   await db.exec('DELETE FROM gempar WHERE id = ?', [numVal(a[1], 'ID tidak valid.')]);
+  await touchUpdated(db, 'cache');
   return true;
 }
 
@@ -452,6 +456,7 @@ function ovrValue(v) {
 async function putOverride(db, table, key, val) {
   if (val == null) await db.exec(`DELETE FROM ${table} WHERE \`key\` = ?`, [key]);
   else await db.exec(`INSERT INTO ${table} (\`key\`, val) VALUES (?, ?) ON DUPLICATE KEY UPDATE val = VALUES(val), updated_at = UTC_TIMESTAMP()`, [key, val]);
+  await touchUpdated(db, 'cache');
 }
 
 async function saveBudOvr(db, user, a) {      // [tok, key, nilai] — key 'BUD|CAB|nama|YYYY-MM' atau 'BUD|TK|kode|YYYY-MM'

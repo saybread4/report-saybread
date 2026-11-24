@@ -13,7 +13,7 @@ export async function touchUpdated(db, nama) {
 // Waktu (UTC) paling baru dari semua pencatatan, atau null.
 export async function lastUpdated(db) {
   try {
-    const r = await db.query('SELECT MAX(updated_at) AS u FROM data_updates');
+    const r = await db.query("SELECT MAX(updated_at) AS u FROM data_updates WHERE nama <> 'cache'");
     return (r[0] && r[0].u) || null;
   } catch (e) {
     return null;

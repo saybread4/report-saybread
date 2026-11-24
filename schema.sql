@@ -409,3 +409,10 @@ CREATE TABLE IF NOT EXISTS reset_requests (
   KEY idx_rst_nik (nik, status),
   KEY idx_rst_status (status, created_at)
 );
+
+-- Penanda refresh inkremental (tahap 1i). Dibuat otomatis oleh aplikasi bila belum ada; baris ini hanya agar skema lengkap.
+CREATE TABLE IF NOT EXISTS mv_meta (
+  k VARCHAR(60) NOT NULL,
+  v VARCHAR(600),
+  PRIMARY KEY (k)
+);

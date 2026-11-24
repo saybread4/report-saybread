@@ -929,7 +929,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <label id="dmLT">Keterangan<select id="dmKet"><option value="">Semua</option><option>closing</option><option>tgl_yang_sama</option></select></label>
    </div>
    <div class="dmhint" id="dmInfo" style="margin-top:5px"></div>
-   <div class="dmr"><button class="b s" id="dmRf" type="button" title="Hitung ulang data ringkasan di database agar Rank, Perform, dan Monitor memakai data terbaru"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Perbarui Dashboard</button><label><input type="checkbox" id="dmAuto">Perbarui dashboard otomatis setelah upload / hapus</label></div>
+   <div class="dmr"><button class="b s" id="dmRf" type="button" title="Hitung ulang data ringkasan yang berubah saja (hemat kuota database). Shift + klik = hitung ulang SEMUA"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Perbarui Dashboard</button><label><input type="checkbox" id="dmAuto">Perbarui dashboard otomatis setelah upload / hapus <small>(disarankan MATI: unggah semua data dulu, lalu tekan Perbarui Dashboard sekali)</small></label></div>
    <div class="dmtabs"><button type="button" data-t="up" class="on">Upload</button><button type="button" data-t="ed">Lihat / Edit / Hapus</button></div>
    <div id="dmUp">
     <div class="dmr"><b>1. Sumber data</b>
@@ -5292,7 +5292,7 @@ async function call(fn,...a){for(let t=0;;t++){try{return await gsr(fn,TOKEN,...
 /* "Perbarui Dashboard" = hitung ulang tabel ringkasan (mv_*) di TiDB agar Rank/Perform/Monitor cepat dan memakai data terbaru.
    Langkah: 0 tanggal · 1 daftar toko · 2 daftar bulan · 3 penjualan harian · 4-5 penjualan item bulanan · 6 stock.
    Langkah 3-5 dipecah menjadi potongan kecil (per bulan / bagian kode); server memberi tahu bila masih ada potongan berikutnya. */
-async function refreshSteps(steps,onProg){
+async function refreshSteps(steps,onProg,force){
   let m='';
   for(let k=0;k<steps.length;k++){
     let sub=0,tot=1;
@@ -5302,7 +5302,7 @@ async function refreshSteps(steps,onProg){
          gagal sementara (503 / koneksi putus). Langkah 4-6 mengisi tabel yang sudah dikosongkan, sehingga TIDAK diulang otomatis. */
       let r;
       for(let t=0;;t++){
-        try{r=await gsr('adminRefresh',TOKEN,steps[k],sub);break}
+        try{r=await gsr('adminRefresh',TOKEN,steps[k],sub,force?'full':'');break}
         catch(e){if(steps[k]<=3&&t<3&&(!e.status||e.status>=500)){await wait(1500*(t+1));continue}throw e}
       }
       m=r.pesan;tot=r.subTotal||1;sub=r.next==null?null:r.next;
@@ -5314,7 +5314,7 @@ const RF_ALL=[0,1,2,3,4,5,6];
 /* Setelah upload/hapus, hanya bagian ringkasan yang terdampak yang dihitung ulang. Tabel lain (budged, trend, item, gempar...) tidak memengaruhi ringkasan. */
 const RF_FOR={sales_toko:RF_ALL,sales_item:[4,5,6],stock:[6],stock_toko:[3],toko:[1,6],modis:[6]};
 const rfProg=(k,n,sub,tot)=>pg((k+(tot>1?sub/tot:0))/n*100,'Memperbarui dashboard '+(k+1)+' / '+n+(tot>1?' ('+(sub+1)+'/'+tot+')':'')+'…');
-async function refreshAll(steps){const m=await refreshSteps(steps||RF_ALL,rfProg);pg(100,'Selesai');return m}
+async function refreshAll(steps,force){const m=await refreshSteps(steps||RF_ALL,rfProg,force);pg(100,'Selesai');return m}
 async function autoRf(){
   if(!$$('#dmAuto').checked)return'';
   const st=RF_FOR[tb];if(!st)return'';
@@ -5431,8 +5431,8 @@ $$('#dmFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;$$('#dmP
 let pT;$$('#dmPaste').oninput=()=>{clearTimeout(pT);pT=setTimeout(()=>{$$('#dmFile').value='';RAW=parseTable($$('#dmPaste').value);analyze()},350)};
 $$('#dmTpl').onclick=()=>saveBlob(new Blob([T[tb].cols.map(c=>c.n).join(',')+'\n'],{type:'text/csv'}),'template_'+tb+'.csv');
 $$('#dmGo').onclick=doUpload;$$('#dmStop').onclick=()=>{stopF=true;toast('Dibatalkan setelah bagian yang sedang berjalan selesai',3000)};
-$$('#dmRf').onclick=async()=>{if(busyF)return;busy(true);const t0=Date.now();
- try{const m=await refreshAll();res('ok','<b>✔ '+esc(m)+'</b> · '+((Date.now()-t0)/1000).toFixed(1)+' detik'+okBtn)}catch(e){err(e)}busy(false)};
+$$('#dmRf').onclick=async(ev)=>{if(busyF)return;busy(true);const t0=Date.now();
+ try{const m=await refreshAll(null,!!(ev&&ev.shiftKey));res('ok','<b>✔ '+esc(m)+'</b> · '+((Date.now()-t0)/1000).toFixed(1)+' detik'+okBtn)}catch(e){err(e)}busy(false)};
 $$('#bRfHp').onclick=async()=>{if(!TOKEN){toast('Masuk sebagai administrator dulu');return}if(busyF)return;
  const b=$$('#bRfHp');b.disabled=true;busyF=true;const t0=Date.now();
  try{const m=await refreshSteps(RF_ALL,(k,n,sub,tot)=>toast('Memperbarui dashboard '+(k+1)+' / '+n+(tot>1?' ('+(sub+1)+'/'+tot+')':'')+'…',120000));

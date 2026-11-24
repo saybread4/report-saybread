@@ -279,7 +279,8 @@ test('override budged: validasi kunci/angka, simpan, hapus, dan batas area Koorb
   const ok = mk((s) => (s.startsWith('SELECT 1') ? [{ x: 1 }] : []));
   await S(koor, 'BUD|TK|T-001|2026-03', 5, ok);
   assert.deepEqual(ok.queries()[0].a, ['T-001', 'T001', 'BAM A']);
-  assert.equal(ok.execs().length, 1);
+  assert.equal(ok.execs().length, 2);                                                      // simpan + catatan versi cache
+  assert.deepEqual(ok.execs()[1].a, ['cache']);
 });
 
 test('override rank: hanya kunci BAS| dan hanya Admin Pusat', async () => {

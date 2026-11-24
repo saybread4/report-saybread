@@ -5,8 +5,9 @@ import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
 import { requireUser, can } from '../../_lib/auth.js';
 import { handlers } from '../../_lib/handlers/index.js';
+import { cacheable, dataVersion, cacheKey, cacheGet, cachePut } from '../../_lib/readcache.js';
 
-export async function handle({ request, env, params }, db) {
+export async function handle({ request, env, params, waitUntil }, db) {
   checkOrigin(request);
   const user = await requireUser(db, request);
   const raw = Array.isArray(params.fn) ? params.fn[0] : params.fn;
@@ -18,6 +19,19 @@ export async function handle({ request, env, params }, db) {
   if (!can(user, h.need || 'view')) throw new HttpError(403, 'Anda tidak punya akses untuk ini.', 'FORBIDDEN');
   const body = await readJson(request);
   const a = Array.isArray(body.a) ? body.a : [];
+  // Fungsi baca: pakai hasil tersimpan bila data belum berubah (hemat RU TiDB). Hasil dibatasi area pengguna lewat kunci cache.
+  let ckey = null, origin = '';
+  if (cacheable(fn) && h.need === 'view') {
+    try {
+      const ver = await dataVersion(db);
+      if (ver) {
+        origin = new URL(request.url).origin;
+        ckey = await cacheKey(fn, a, user, ver);
+        const hit = await cacheGet(origin, ckey);
+        if (hit != null) return new Response(hit, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Cache': 'HIT' } });
+      }
+    } catch (e) { ckey = null; }   // cache tidak boleh menggagalkan permintaan
+  }
   let result;
   try { result = await h.run({ db, user, env }, a); }
   catch (e) {
@@ -26,7 +40,13 @@ export async function handle({ request, env, params }, db) {
     // Hanya Admin Utama / Administrator: tampilkan penyebab asli supaya mudah dicari (pengguna lain tetap melihat pesan umum).
     throw new HttpError(500, `Fungsi ${fn} gagal: ${String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 300)}`);
   }
-  return json(result === undefined ? null : result);
+  const out = result === undefined ? null : result;
+  if (ckey) {
+    const text = JSON.stringify(out);
+    await cachePut(origin, ckey, text, waitUntil);
+    return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Cache': 'MISS' } });
+  }
+  return json(out);
 }
 
 export async function onRequestPost(ctx) {

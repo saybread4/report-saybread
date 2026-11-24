@@ -1,5 +1,23 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
+Status: **tahap 1i — hemat Request Units (RU)**. Tes: `node --test "test/*.test.mjs"` (112 tes; 1 tes lama gagal karena `migrasi-1e.sql` tidak ikut di zip, bukan karena perubahan ini).
+
+## Tahap 1i — hemat RU TiDB Cloud (kuota gratis Starter: 50 juta RU / bulan / instance)
+**Tidak ada migrasi SQL.** Tabel `mv_meta` dibuat otomatis saat refresh pertama. Cukup deploy.
+
+Hasil ukur di Diagnosis → SQL Statement (3 hari pertama): refresh penuh (`INSERT INTO mv_*`) ± 2,5 juta RU, `COMMIT` (tulis) 1,5 juta, query Rank ± 0,4 juta + bacaan `mv_tgl` ± 0,26 juta.
+
+1. **Refresh inkremental** (`functions/_lib/handlers/refresh.js`). Potongan yang isinya tidak berubah TIDAK ditulis ulang:
+   - Penjualan harian (`mv_tgl`): tiap jendela 10 hari dibandingkan dengan sumbernya (jumlah baris, qty, rp, margin, BA, produksi, stock DOUGH); sama -> dilewati.
+   - Item bulanan (`mv_mon_rows`, `mv_mon_same`): per bulan dibandingkan dengan `sales_item`; bulan yang sama dilewati, bulan yang beda dihapus lalu diisi ulang (tanpa `TRUNCATE` semua bulan). Bila bulan baru masuk (nomor `mi` bergeser) bulan yang bergeser otomatis dihitung ulang.
+   - Stock (`mv_stock_idx`): sidik jari data sumber (stock tanggal terbaru, toko, modis, sales_item bulan berjalan, tanggal terakhir penjualan) disimpan di `mv_meta`; sama -> 8 INSERT berat dilewati.
+   - **Shift + klik "Perbarui Dashboard"** = hitung ulang SEMUA seperti dulu (gunakan bila curiga ringkasan tidak cocok).
+   - Pembanding berbasis jumlah; dua perubahan yang saling meniadakan dalam satu jendela tidak terdeteksi (sangat jarang). Shift + klik mengatasinya.
+2. **Cache hasil baca di server** (`functions/_lib/readcache.js`, dipakai `api/rpc/[fn].js`). Fungsi `get*` disimpan per (fungsi, argumen, jabatan+area, versi data). Versi data = `MAX(updated_at)` di `data_updates`; impor, hapus, refresh, dan ubah Gempar/override mencatat versi baru. Lapis memori Worker + Cloudflare Cache API (bila tersedia; bila tidak, tetap jalan tanpa penghematan). Header respons `X-Cache: HIT/MISS` untuk memeriksa. Batas umur cache 6 jam.
+3. **Pemakaian yang disarankan**: matikan "Perbarui dashboard otomatis", unggah semua data hari itu, lalu tekan **Perbarui Dashboard** SEKALI. Unggah hanya data baru dengan mode "Tambah / perbarui", bukan "Ganti" untuk rentang besar.
+
+Belum dikerjakan (kandidat berikutnya): kolom `knorm` berindeks di `toko`/`stock`/`modis` (menghilangkan `REGEXP_REPLACE` di join Rank dan stock), `mv_mon_*` berkunci tahun-bulan alih-alih `mi`.
+
 Status: **tahap 1f — Perbarui Dashboard bertahap, Administrator tidak melihat Admin Utama, chip Muat ulang & cakupan dihapus**.
 Tes otomatis (101 tes; sebagian dijalankan terhadap SQLite sungguhan, bukan hanya tiruan): `node --test "test/*.test.mjs"`.
 
