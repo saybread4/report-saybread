@@ -102,7 +102,7 @@ for (const [nama, user] of Object.entries(users)) {
   test(`Rank (${nama}): hasil agregasi di database = perhitungan acuan, termasuk kode ber-spasi`, async () => {
     let data; const db = sqliteDb((raw) => { data = rankData(raw); });
     const out = await handlers.getrankcab.run({ db, user }, [[]]);
-    assert.ok(db.log.some((s) => s.includes('GROUP BY grp')), 'harus memakai agregasi SQL');
+    assert.ok(db.log.some((s) => /GROUP BY s\.\w+, t\.tanggal/.test(s)), 'harus memakai agregasi SQL');
     assert.deepEqual(flatten(out), expected(data, user, null));
     // baris November (kode ber-spasi) harus ikut terhitung
     const nov = [...flatten(out).cab].filter(([k]) => k.includes('2026-11'));
@@ -112,7 +112,7 @@ for (const [nama, user] of Object.entries(users)) {
 
   test(`Rank (${nama}): cara lama (cadangan) menghasilkan angka yang sama`, async () => {
     let data; const db = sqliteDb((raw) => { data = rankData(raw); });
-    const lama = { ...db, async query(sql, a) { if (sql.includes('GROUP BY grp')) throw new Error('simulasi: SQL agregasi gagal'); return db.query(sql, a); } };
+    const lama = { ...db, async query(sql, a) { if (/GROUP BY s\.\w+, t\.tanggal/.test(sql)) throw new Error('simulasi: SQL agregasi gagal'); return db.query(sql, a); } };
     const out = await handlers.getrankcab.run({ db: lama, user }, [[]]);
     assert.deepEqual(flatten(out), expected(data, user, null));
     const baru = await handlers.getrankcab.run({ db, user }, [[]]);

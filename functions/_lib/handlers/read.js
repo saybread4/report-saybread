@@ -113,20 +113,26 @@ async function rankAggSql(db, user, G, names, dt, wantNorm) {
     where.push(`${NORM('k.kode')} IN (SELECT ${NORM('x.kode')} FROM toko x WHERE ${w.sql})`);
     params.push(...w.params);
   }
-  const expr = { cab: rankLabel('k.cabang'), pnl: rankLabel('k.cabpnl'), bas: rankLabel('o.bas'), bastr: rankLabel('o.bastr'), am: rankLabel('o.am'), as: rankLabel('o.as_') };
-  const sql = (g) => `SELECT ${expr[g]} AS grp, t.tanggal AS tgl, SUM(t.qty) AS q, SUM(t.rp) AS rp, SUM(t.barp) AS b,
-        COUNT(*) AS n, SUM(CASE WHEN t.qty > 0 THEN 1 ELSE 0 END) AS nq
-      FROM mv_tgl t
-      JOIN mv_ks k ON k.kode = t.kode
+  // Atribut tiap toko (label cabang/PNL/BAS/...) dihitung SEKALI per toko di tabel turunan `s` (~12 ribu baris), lalu digabung ke mv_tgl
+  // dengan kode persis. Dulu norm(kode) (REGEXP) dihitung untuk setiap baris harian (ratusan ribu x 6 query) -> sangat berat dan rawan gagal/timeout.
+  const stores = `SELECT k.kode AS kode, ${rankLabel('k.cabang')} AS cab, ${rankLabel('k.cabpnl')} AS pnl,
+        ${rankLabel('o.bas')} AS bas, ${rankLabel('o.bastr')} AS bastr, ${rankLabel('o.am')} AS am, ${rankLabel('o.as_')} AS as_
+      FROM mv_ks k
       LEFT JOIN (SELECT ${NORM('kode')} AS nk, MIN(bas) AS bas, MIN(bastr) AS bastr, MIN(am) AS am, MIN(\`as\`) AS as_
                    FROM toko GROUP BY ${NORM('kode')}) o ON o.nk = ${NORM('k.kode')}
-     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-     GROUP BY grp, tgl`;
-  const ORD = 'grp, tgl';
+     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
+  const col = { cab: 'cab', pnl: 'pnl', bas: 'bas', bastr: 'bastr', am: 'am', as: 'as_' };
+  const sql = (g) => `SELECT s.${col[g]} AS grp, t.tanggal AS tgl, SUM(t.qty) AS q, SUM(t.rp) AS rp, SUM(t.barp) AS b,
+        COUNT(*) AS n, SUM(CASE WHEN t.qty > 0 THEN 1 ELSE 0 END) AS nq
+      FROM mv_tgl t
+      JOIN (${stores}) s ON s.kode = t.kode
+     GROUP BY s.${col[g]}, t.tanggal`;
   const agg = {};
   await Promise.all(G.map(async (g) => {
     const m = new Map();
-    for (const r of await queryAll(db, sql(g), params, ORD)) {
+    let rows = await db.query(sql(g), params);
+    if (rows.length >= 10000) rows = await queryAll(db, sql(g), params, 'grp, tgl');   // hasil mungkin terpotong di 10.000 baris: baca ulang per halaman
+    for (const r of rows) {
       const gi = names[g].get(r.grp), di = dt.di.get(ymd(r.tgl));
       if (gi === undefined || di === undefined) continue;
       m.set(gi * 100000 + di, [gi, di, num(r.q), num(r.rp), num(r.b), num(r.n), num(r.nq)]);
@@ -480,7 +486,8 @@ export const readHandlers = {
         agg = await rankAggSql(db, user, G, names, dt, wantNorm);
       } catch (e) {                                   // jaga-jaga: bila SQL agregasi gagal, pakai cara lama (lebih berat)
         console.error('agregasi Rank di database gagal, memakai cara lama', e);
-        agg = await rankAggJs(db, stores, G, names, dt);
+        try { agg = await rankAggJs(db, stores, G, names, dt); }
+        catch (e2) { throw new Error('Rank gagal. SQL agregasi: ' + String((e && e.message) || e).slice(0, 200) + ' | cara lama: ' + String((e2 && e2.message) || e2).slice(0, 120)); }
       }
       const out = { dates: dt.list, warn: '', ovr: await overrides(db, 'rank_override') };
       for (const g of G) out[g] = { names: order[g], rows: [...agg[g].values()].sort((p, q) => p[0] - q[0] || p[1] - q[1]) };

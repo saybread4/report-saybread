@@ -18,7 +18,14 @@ export async function handle({ request, env, params }, db) {
   if (!can(user, h.need || 'view')) throw new HttpError(403, 'Anda tidak punya akses untuk ini.', 'FORBIDDEN');
   const body = await readJson(request);
   const a = Array.isArray(body.a) ? body.a : [];
-  const result = await h.run({ db, user, env }, a);
+  let result;
+  try { result = await h.run({ db, user, env }, a); }
+  catch (e) {
+    if (e instanceof HttpError || !can(user, 'pusat')) throw e;
+    console.error(`rpc ${fn} gagal`, e);
+    // Hanya Admin Utama / Administrator: tampilkan penyebab asli supaya mudah dicari (pengguna lain tetap melihat pesan umum).
+    throw new HttpError(500, `Fungsi ${fn} gagal: ${String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
   return json(result === undefined ? null : result);
 }
 
