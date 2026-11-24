@@ -160,6 +160,21 @@ test('refresh: TRUNCATE lalu isi ulang; langkah berat dipecah per bulan (dan per
     [['2026-11-01', '2026-12-01', '2026-11-01', '2026-12-01'], ['2026-12-01', '2027-01-01', '2026-12-01', '2027-01-01']]);
   assert.deepEqual(await refreshStep(mock([[/FROM sales_toko GROUP BY ym/, []]]), 3, 0), { next: null, total: 0 });   // belum ada data penjualan
 
+  // langkah stock dibagi 8 bagian; hanya potongan pertama yang mengosongkan tabel.
+  const ds = mock([]);
+  let stockSub = 0, stockCalls = 0;
+  do {
+    const r = await refreshStep(ds, 6, stockSub);
+    assert.equal(r.total, 8);
+    stockSub = r.next;
+    stockCalls++;
+  } while (stockSub != null);
+  assert.equal(stockCalls, 8);
+  assert.equal(ds.calls.filter((c) => /^TRUNCATE TABLE mv_stock_idx$/.test(c.s)).length, 1);
+  const stockIns = ds.calls.filter((c) => /^INSERT INTO mv_stock_idx/.test(c.s));
+  assert.equal(stockIns.length, 8);
+  assert.match(stockIns[0].s, /MOD\(CRC32\(st\.kode\), 8\) = 0/);
+
   for (let st = 0; st < STEPS; st++) await refreshStep(mock([[/FROM mv_mon_list/, []], [/FROM sales_toko GROUP BY ym/, []]]), st);
   await assert.rejects(refreshStep(mock([]), 9));
   const r = await handlers.adminrefresh.run({ db: mock([]) }, ['tok', 0]);

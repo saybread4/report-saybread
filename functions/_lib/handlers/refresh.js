@@ -13,7 +13,8 @@ const MONTH_START = (c) => `DATE_SUB(${c}, INTERVAL (DAYOFMONTH(${c}) - 1) DAY)`
 
 export const STEPS = 7;
 export const STEP_NAMA = ['tanggal', 'daftar toko', 'daftar bulan', 'penjualan harian', 'penjualan item bulanan', 'penjualan item tanggal sama', 'stock'];
-const BUCKETS = 4;   // langkah 4 & 5: tiap bulan dibagi 4 bagian menurut kode toko (CRC32(kode) % 4)
+const BUCKETS = 4;   // langkah 4 & 5: tiap bulan dibagi 4 bagian menurut kode toko
+const STOCK_BUCKETS = 8; // langkah stock dibagi 8 agar query tidak memakan memori TiDB terlalu besar
 
 // Langkah 4 dan 5 dikerjakan per bulan (mi) DAN per bagian kode, supaya satu transaksi tidak terlalu besar.
 const monSql = (table, ket, having) => `
@@ -65,12 +66,15 @@ export const SQL = {
   monRows: monSql('mv_mon_rows', 'closing', HAVING_NONZERO),
   monSame: monSql('mv_mon_same', 'tgl_yang_sama', ''),
 
-  stockIdx: `INSERT INTO mv_stock_idx (kode, deskripsi, cab, bas, as_, tk, tk_key, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md)
+  stockIdx: (bucket) => `INSERT INTO mv_stock_idx (kode, deskripsi, cab, bas, as_, tk, tk_key, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md)
     SELECT b.kode, b.deskripsi, b.cab, b.bas, b.as_, b.tk, b.tk_key, b.jn, b.qty, b.qpd, b.md,
-           DENSE_RANK() OVER (ORDER BY b.cab) - 1, DENSE_RANK() OVER (ORDER BY b.bas) - 1,
-           DENSE_RANK() OVER (ORDER BY b.as_) - 1, DENSE_RANK() OVER (ORDER BY b.tk_key) - 1,
-           DENSE_RANK() OVER (ORDER BY b.deskripsi) - 1, DENSE_RANK() OVER (ORDER BY b.jn) - 1,
-           DENSE_RANK() OVER (ORDER BY b.md) - 1
+           MOD(CRC32(COALESCE(b.cab, '')), 2000000000),
+           MOD(CRC32(COALESCE(b.bas, '')), 2000000000),
+           MOD(CRC32(COALESCE(b.as_, '')), 2000000000),
+           MOD(CRC32(COALESCE(b.tk_key, '')), 2000000000),
+           MOD(CRC32(COALESCE(b.deskripsi, '')), 2000000000),
+           MOD(CRC32(COALESCE(b.jn, '')), 2000000000),
+           MOD(CRC32(COALESCE(b.md, '')), 2000000000)
       FROM (
         SELECT st.kode, TRIM(st.deskripsi) AS deskripsi,
                ${NZ('t.cabang')} AS cab, ${NZ('t.bas')} AS bas, ${NZ('t.`as`')} AS as_,
@@ -83,6 +87,10 @@ export const SQL = {
           LEFT JOIN (
             SELECT s.kode, TRIM(s.deskripsi) AS deskripsi, SUM(s.sales_qty) / NULLIF(bl.hari, 0) AS qpd
               FROM sales_item s
+              JOIN (SELECT DISTINCT kode, TRIM(deskripsi) AS deskripsi FROM stock
+                     WHERE tanggal = (SELECT MAX(tanggal) FROM stock)
+                       AND MOD(CRC32(kode), ${STOCK_BUCKETS}) = ${bucket}) sk
+                ON sk.kode = s.kode AND sk.deskripsi = TRIM(s.deskripsi)
               CROSS JOIN (SELECT DAY(MAX(tanggal)) AS hari, YEAR(MAX(tanggal)) AS y, MONTH(MAX(tanggal)) AS m FROM sales_toko) bl
              WHERE s.ket = 'closing' AND s.tahun = bl.y AND s.bulan = bl.m
              GROUP BY s.kode, TRIM(s.deskripsi), bl.hari
@@ -91,11 +99,13 @@ export const SQL = {
             SELECT z.nk, z.nd, z.modis
               FROM (SELECT y.nk, y.nd, y.modis, ROW_NUMBER() OVER (PARTITION BY y.nk, y.nd ORDER BY y.id) AS rn
                       FROM (SELECT id, ${NORMSQL('kode')} AS nk, ${NORMSQL('deskripsi')} AS nd, modis
-                              FROM modis WHERE ${NZ('modis')} <> '') y) z
+                              FROM modis WHERE ${NZ('modis')} <> ''
+                                AND MOD(CRC32(kode), ${STOCK_BUCKETS}) = ${bucket}) y) z
              WHERE z.rn = 1
           ) md ON md.nk = ${NORMSQL('st.kode')} AND md.nd = ${NORMSQL('st.deskripsi')}
          WHERE st.tanggal = (SELECT MAX(tanggal) FROM stock)
-      ) b`,
+           AND MOD(CRC32(st.kode), ${STOCK_BUCKETS}) = ${bucket}
+      ) b`
 };
 
 const TABLES = ['mv_dates', 'mv_ks', 'mv_mon_list', 'mv_tgl', 'mv_mon_rows', 'mv_mon_same', 'mv_stock_idx'];
@@ -127,9 +137,15 @@ export async function refreshStep(db, step, sub = 0) {
     await db.exec(step === 4 ? SQL.monRows : SQL.monSame, [months[Math.floor(sub / BUCKETS)], sub % BUCKETS]);
     return { next: sub + 1 < total ? sub + 1 : null, total };
   }
+  if (step === 6) {                                         // stock: dibagi per bagian kode agar query tetap ringan
+    if (sub === 0) await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
+    if (sub >= STOCK_BUCKETS) return { next: null, total: STOCK_BUCKETS };
+    await db.exec(SQL.stockIdx(sub));
+    return { next: sub + 1 < STOCK_BUCKETS ? sub + 1 : null, total: STOCK_BUCKETS };
+  }
   if (sub === 0) {                                          // langkah ringan: satu perintah
     await db.exec(`TRUNCATE TABLE ${TABLES[step]}`);
-    await db.exec([SQL.dates, SQL.ks, SQL.monList, null, null, null, SQL.stockIdx][step]);
+    await db.exec([SQL.dates, SQL.ks, SQL.monList][step]);
   }
   return { next: null, total: 1 };
 }
