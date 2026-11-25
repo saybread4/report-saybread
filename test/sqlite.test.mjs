@@ -151,7 +151,7 @@ test('getmeta: filter terisi dari tabel toko walau data stock KOSONG; Diperbarui
   assert.deepEqual(m.srows, [[0, 0, 0, 0], [1, 0, 1, 1]]);
   assert.equal(m.updated, '22/11/2026 11:10');                       // 04:10 UTC = 11:10 WIB
   assert.deepEqual([m.tgl, m.qpd.bulan, m.qpd.hari], [null, 11, 19]);
-  assert.deepEqual(await handlers.getrows.run({ db, user: users.pusat }), []);
+  assert.deepEqual((await handlers.getrows.run({ db, user: users.pusat })).toJSON(), []);
   const a = await handlers.getmeta.run({ db, user: users.bamA });     // dibatasi area
   assert.deepEqual(a.d.tk, [['G020', 'YOGYAKARTA', 'CICI', 'BUDI']]);
   assert.equal(a.srows.length, 1);
@@ -173,7 +173,7 @@ test('getmeta: kamus stock tetap di posisi semula, toko yang sama (beda tulisan 
   assert.deepEqual(m.srows, [[0, 0, 0, 0], [1, 1, 1, 1]]);
   assert.equal(m.updated, '21/11/2026 09:00');                               // cadangan: waktu isi stock (tabel data_updates kosong)
   assert.equal(m.tgl, '19/11/2026');
-  const rows = await handlers.getrows.run({ db, user: users.pusat });
+  const rows = (await handlers.getrows.run({ db, user: users.pusat })).toJSON();
   assert.deepEqual(rows, [[0, 0, 0, 0, 0, 0, 5, 1.5, 0]]);                  // baris stock tidak berubah
 });
 
@@ -378,4 +378,46 @@ test('Rank: 60 hari -> dipecah jadi rentang tanggal, berurutan, paling banyak 28
   assert.equal(out.cab.rows.reduce((s, r) => s + r[3], 0), 60 * 300);
   assert.equal(maks, 1, 'query agregasi tidak boleh berjalan serentak');
   assert.ok(db.log.filter((s) => /FROM mv_tgl t/.test(s)).length <= 28);
+});
+
+// ---- Stock jalur cepat (SQL GROUP BY) dijalankan di SQLite sungguhan --------------------------------------------------------------
+test('Stock jalur cepat: kamus & baris konsisten, dibatasi area, dan tidak ada toko hilang', async () => {
+  const mk = (kode, cab, bas, as_, tkn, ds, qty, qpd, i) => ({ kode, deskripsi: ds, cab, bas, as_, tk: JSON.stringify([kode, tkn, 'AM', 'BT']), tk_key: kode + '|' + tkn, jn: 'DOUGH', qty, qpd, md: 'Aktif',
+    i_cab: 1000 + i[0], i_bas: 2000 + i[1], i_as: 3000 + i[2], i_tk: 9000 + i[3], i_ds: 500 + i[4], i_jn: 7, i_md: 8 });
+  const db = sqliteDb((raw) => {
+    ins(raw, 'toko', [{ kode: 'T-1', bam: 'BAM A' }, { kode: 'T2', bam: 'BAM A' }, { kode: 'X9', bam: 'BAM B' }]);
+    ins(raw, 'mv_stock_idx', [
+      mk('T-1', 'C1', 'B1', 'S1', 'Toko 1', 'Roti A', 5, 2.345, [0, 0, 0, 0, 0]),
+      mk('X9', 'C9', 'B9', 'S9', 'Toko X', 'Roti B', 3, 1, [9, 9, 9, 9, 1]),
+      mk('t2', 'C2', 'B1', 'S1', 'Toko 2', 'Roti B', 1, 0, [1, 0, 0, 1, 1]),
+    ]);
+  });
+  const sc = { jabatan: 'BAM', bam_scope: ['BAM A'] };
+  const m = await handlers.getmeta.run({ db, user: sc });
+  assert.deepEqual(m.d.cab.slice(0, 2), ['C1', 'C2']);                       // dari stock, urut indeks asli
+  assert.ok(!m.d.cab.includes('C9') && !m.d.bas.includes('B9'));             // BAM lain tidak bocor
+  assert.deepEqual(m.d.tk.map((x) => x[0]), ['T-1', 't2']);
+  const r = (await handlers.getrows.run({ db, user: sc })).toJSON();
+  assert.deepEqual(r, [[0, 0, 0, 0, 0, 0, 5, 2.35, 0], [1, 0, 0, 1, 1, 0, 1, 0, 0]]);
+  const full = (await handlers.getrows.run({ db, user: users.pusat })).toJSON();
+  assert.equal(full.length, 3);
+  const fm = await handlers.getmeta.run({ db, user: users.pusat });
+  assert.ok(['C1', 'C2', 'C9'].every((c) => fm.d.cab.includes(c)));
+  assert.ok(db.log.every((q) => !/SELECT .*FROM mv_stock_idx(?! WHERE| GROUP)/.test(q) || /GROUP BY|LIMIT/.test(q)));
+});
+
+test('Stock jalur cepat: lebih dari 10.000 toko tetap lengkap (kamus dibaca per halaman) dan JSON valid', async () => {
+  const N = 12500;
+  const db = sqliteDb((raw) => {
+    const st = raw.prepare('INSERT INTO mv_stock_idx (kode, deskripsi, cab, bas, as_, tk, tk_key, jn, qty, qpd, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    raw.exec('BEGIN');
+    for (let i = 0; i < N; i++) st.run('K' + i, 'D', 'C', 'B', 'A', JSON.stringify(['K' + i, 'Toko ' + i]), 'k' + i, 'DOUGH', 1, 1, 'Aktif', 1, 1, 1, 100000 + i, 1, 1, 1);
+    raw.exec('COMMIT');
+  });
+  const m = await handlers.getmeta.run({ db, user: users.pusat });
+  assert.equal(m.d.tk.length, N);
+  const raw = await handlers.getrows.run({ db, user: users.pusat });
+  const rows = JSON.parse(raw.json);
+  assert.equal(rows.length, N);
+  assert.deepEqual(rows.map((x) => x[3]).sort((x, y) => x - y), Array.from({ length: N }, (_, i) => i));   // tiap toko tepat satu indeks 0..N-1
 });

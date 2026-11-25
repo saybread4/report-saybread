@@ -32,3 +32,11 @@ export function fixKode(k) {
   }
   return s;
 }
+
+// Hasil handler yang SUDAH berupa teks JSON (mis. getrows: ratusan ribu baris). Server mengirimnya apa adanya tanpa JSON.stringify
+// ulang, sehingga tidak perlu menyimpan ratusan ribu array kecil di memori Worker.
+export class RawJson {
+  constructor(json) { this.json = json; }
+  toString() { return this.json; }
+  toJSON() { return JSON.parse(this.json); }
+}

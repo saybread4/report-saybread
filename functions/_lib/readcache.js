@@ -68,3 +68,37 @@ export async function cachePut(origin, key, text, waitUntil) {
 }
 
 export const _clearForTest = () => { MEM.clear(); memBytes = 0; };
+
+// ---- Lapis 3: cache besar di TiDB ---------------------------------------------------------------------------------------------------
+// Hasil yang terlalu besar untuk memori Worker (getrows ~8 MB) tidak pernah masuk lapis 1, dan Cloudflare Cache API tidak selalu aktif
+// (mis. di *.pages.dev). Tanpa lapis ini, SETIAP pembukaan halaman Stock menghitung ulang ratusan ribu baris -> HTTP 503.
+// Disimpan terpotong-potong di tabel read_cache (dibuat otomatis, tanpa migrasi). Kunci sudah memuat versi data + area pengguna,
+// jadi hasil lama tidak pernah dipakai setelah data berubah. Gagal baca/tulis TIDAK boleh menggagalkan permintaan.
+export const BIG_FNS = new Set(['getrows']);
+const BIG_DDL = 'CREATE TABLE IF NOT EXISTS read_cache (k VARCHAR(64) NOT NULL, part INT NOT NULL, n INT NOT NULL, body MEDIUMTEXT, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (k, part))';
+const BIG_PART = 300000;     // karakter per baris tabel
+const BIG_PER_INSERT = 3;    // baris per INSERT (+- 1 MB), supaya jumlah subrequest tetap kecil
+
+export async function bigGet(db, key) {
+  try {
+    const r = await db.query('SELECT part, n, body FROM read_cache WHERE k = ? ORDER BY part', [key]);
+    if (!r.length) return null;
+    const n = Number(r[0].n);
+    if (r.length !== n || r.some((x, i) => Number(x.part) !== i)) return null;   // tulis terputus: anggap tidak ada
+    return r.map((x) => String(x.body)).join('');
+  } catch (e) { return null; }
+}
+
+export async function bigPut(db, key, text) {
+  try {
+    await db.exec(BIG_DDL);
+    const parts = [];
+    for (let i = 0; i < text.length; i += BIG_PART) parts.push(text.slice(i, i + BIG_PART));
+    await db.exec('DELETE FROM read_cache WHERE k = ? OR created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY)', [key]);
+    for (let i = 0; i < parts.length; i += BIG_PER_INSERT) {
+      const grp = parts.slice(i, i + BIG_PER_INSERT);
+      await db.exec(`INSERT INTO read_cache (k, part, n, body) VALUES ${grp.map(() => '(?, ?, ?, ?)').join(', ')}`,
+        grp.flatMap((b, j) => [key, i + j, parts.length, b]));
+    }
+  } catch (e) { console.error('read_cache gagal ditulis', e && e.message); }
+}

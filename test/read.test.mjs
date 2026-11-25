@@ -72,7 +72,10 @@ test('getmeta + getrows: indeks disusun ulang dan konsisten setelah disaring are
     { kode: 'X9', deskripsi: 'Roti B', cab: 'C9', bas: 'B9', as_: 'S9', tk: ['X9', 'Toko X', '', ''], jn: 'DOUGH', qty: 3, qpd: 1, md: 'Aktif', i_cab: 1, i_bas: 1, i_as: 1, i_tk: 1, i_ds: 1, i_jn: 0, i_md: 0 },
     { kode: 'T2', deskripsi: 'Roti B', cab: 'C2', bas: 'B1', as_: 'S1', tk: '["T2","Toko 2","AM","BT"]', jn: 'DOUGH', qty: 1, qpd: 0, md: 'Aktif', i_cab: 2, i_bas: 0, i_as: 0, i_tk: 2, i_ds: 1, i_jn: 0, i_md: 0 },
   ];
+  // Jalur cepat memakai SQL (GROUP BY + subquery area); mock tidak bisa menjalankan SQL, jadi di sini jalur itu ditolak
+  // supaya cara lama (cadangan) yang diuji. Jalur cepat diuji dengan SQLite sungguhan di sqlite.test.mjs.
   const routes = [
+    [/GROUP BY|FROM toko x WHERE/, () => { throw new Error('tidak didukung mock'); }],
     [/FROM mv_stock_idx/, IDX], [/^SELECT kode FROM toko WHERE/, TOKO], [/^SELECT kode, toko, bas, bastr/, []],
     [/MAX\(created_at\)/, [{ u: '2026-11-21 02:30:00', t: '2026-11-21' }]],
     [/MAX\(tanggal\) AS m FROM sales_toko/, [{ m: '2026-11-20' }]],
@@ -82,9 +85,9 @@ test('getmeta + getrows: indeks disusun ulang dan konsisten setelah disaring are
   assert.deepEqual(m.d.tk.map((x) => x[0]), ['T1', 'T2']);
   assert.equal(m.updated, '21/11/2026 09:30'); assert.equal(m.tgl, '21/11/2026');
   assert.deepEqual(m.qpd, { bulan: 11, nama: 'November', hari: 20 });
-  const r = await handlers.getrows.run({ db: mock(routes), user: bamA });
+  const r = (await handlers.getrows.run({ db: mock(routes), user: bamA })).toJSON();
   assert.deepEqual(r, [[0, 0, 0, 0, 0, 0, 5, 2.35, 0], [1, 0, 0, 1, 1, 0, 1, 0, 0]]);
-  const full = await handlers.getrows.run({ db: mock(routes), user: pusat });
+  const full = (await handlers.getrows.run({ db: mock(routes), user: pusat })).toJSON();
   assert.equal(full.length, 3); assert.equal(full[1][0], 1);
 });
 

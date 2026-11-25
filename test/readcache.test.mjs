@@ -54,3 +54,30 @@ test('cache baca: tanpa versi data (data_updates kosong/tidak ada) tidak di-cach
   const { state, call } = await setup(null);
   assert.equal((await call('P01')).x, null); assert.equal((await call('P01')).x, null); assert.equal(state.heavy, 2);
 });
+
+// ---- Cache besar di TiDB (read_cache): hasil bisa dibaca utuh, potongan yang tidak lengkap ditolak ----
+import { bigGet, bigPut } from '../functions/_lib/readcache.js';
+function memTable() {
+  const rows = [];
+  return {
+    rows,
+    async exec(sql, a = []) {
+      if (/^CREATE TABLE/.test(sql)) return;
+      if (/^DELETE FROM read_cache/.test(sql)) { for (let i = rows.length - 1; i >= 0; i--) if (rows[i].k === a[0]) rows.splice(i, 1); return; }
+      if (/^INSERT INTO read_cache/.test(sql)) { for (let i = 0; i < a.length; i += 4) rows.push({ k: a[i], part: a[i + 1], n: a[i + 2], body: a[i + 3] }); }
+    },
+    async query(sql, a = []) { return rows.filter((r) => r.k === a[0]).sort((x, y) => x.part - y.part); },
+  };
+}
+test('read_cache: teks besar disimpan terpotong dan dibaca utuh; tulis terputus dianggap tidak ada', async () => {
+  const db = memTable();
+  const text = '[' + Array.from({ length: 200000 }, (_, i) => `[${i},1,2]`).join(',') + ']';   // ~2 MB
+  await bigPut(db, 'abc', text);
+  assert.ok(db.rows.length > 5);
+  assert.equal(await bigGet(db, 'abc'), text);
+  assert.equal(await bigGet(db, 'lain'), null);
+  db.rows.pop();                                                     // simulasi tulis terputus
+  assert.equal(await bigGet(db, 'abc'), null);
+  await bigPut(db, 'abc', '[1]');                                    // menimpa isi lama sepenuhnya
+  assert.equal(await bigGet(db, 'abc'), '[1]');
+});

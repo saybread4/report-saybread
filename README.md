@@ -1,5 +1,20 @@
 # Dashboard — pindah ke TiDB Cloud + login NIK (Cloudflare Pages)
 
+## Tahap 1k — HTTP 503 setelah "Perbarui Dashboard"
+Gejala: setelah unggah data + Perbarui Dashboard, halaman Stock dan Rank menampilkan "Gagal memuat data: HTTP 503". Pesan ini BUKAN dari
+kode aplikasi (kode ini tidak pernah menjawab 503); ia datang dari Cloudflare saat Worker melebihi batas CPU / memori / subrequest.
+Penyebab yang ditemukan: setelah refresh, versi data berubah sehingga SEMUA cache hasil baca tidak terpakai. Pada saat itu halaman Stock
+memindai seluruh `mv_stock_idx` (~195 ribu baris) dua kali (getmeta + getrows), ~45 query dan ratusan ribu objek di memori Worker.
+
+Perbaikan (tanpa migrasi SQL; tabel `read_cache` dibuat otomatis):
+- `getmeta`: kamus filter kini dihitung database (`GROUP BY`), bukan dengan memindai baris di Worker. Tinggal ~7-9 query kecil.
+- `getrows`: tiap halaman langsung diubah menjadi potongan teks JSON (`RawJson`), tanpa 195 ribu array di memori dan tanpa `JSON.stringify` ulang.
+- Hasil besar (`getrows`, ~8 MB) disimpan di TiDB (`read_cache`, `readcache.js` lapis 3); pembukaan berikutnya hanya 1 query (header `X-Cache: HIT-DB`).
+- Cara lama (memindai baris) tetap ada sebagai cadangan bila SQL jalur cepat ditolak database.
+- Tes: `node --test "test/*.test.mjs"` (120 tes; 1 tes lama gagal karena `migrasi-1e.sql` tidak ikut di zip).
+Bila 503 masih muncul: Cloudflare -> Workers & Pages -> project -> Functions -> Real-time logs, buka halaman Stock, dan lihat pesan
+"Exceeded CPU Limit" / "Exceeded Memory" / "Too many subrequests".
+
 Status: **tahap 1j — Rank BAM, perbaikan Stock >10.000 baris, hemat RU**. Tes: `node --test "test/*.test.mjs"` (112 tes; 1 tes lama gagal karena `migrasi-1e.sql` tidak ikut di zip, bukan karena perubahan ini).
 
 ## Tahap 1j

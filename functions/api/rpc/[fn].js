@@ -5,7 +5,8 @@ import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
 import { requireUser, can } from '../../_lib/auth.js';
 import { handlers } from '../../_lib/handlers/index.js';
-import { cacheable, dataVersion, cacheKey, cacheGet, cachePut } from '../../_lib/readcache.js';
+import { cacheable, dataVersion, cacheKey, cacheGet, cachePut, BIG_FNS, bigGet, bigPut } from '../../_lib/readcache.js';
+import { RawJson } from '../../_lib/util.js';
 
 export async function handle(ctx, db) {
   const { request, env, params } = ctx;
@@ -31,6 +32,10 @@ export async function handle(ctx, db) {
         ckey = await cacheKey(fn, a, user, ver);
         const hit = await cacheGet(origin, ckey);
         if (hit != null) return new Response(hit, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Cache': 'HIT' } });
+        if (BIG_FNS.has(fn)) {   // hasil besar: cache di TiDB (satu query), jauh lebih murah daripada menghitung ulang
+          const big = await bigGet(db, ckey);
+          if (big != null) return new Response(big, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Cache': 'HIT-DB' } });
+        }
       }
     } catch (e) { ckey = null; }   // cache tidak boleh menggagalkan permintaan
   }
@@ -43,9 +48,14 @@ export async function handle(ctx, db) {
     throw new HttpError(500, `Fungsi ${fn} gagal: ${String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 300)}`);
   }
   const out = result === undefined ? null : result;
+  if (out instanceof RawJson && !ckey) return new Response(out.json, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
   if (ckey) {
-    const text = JSON.stringify(out);
+    const text = out instanceof RawJson ? out.json : JSON.stringify(out);
     await cachePut(origin, ckey, text, waitUntil);
+    if (BIG_FNS.has(fn) && text.length > 1_000_000) {
+      const p = bigPut(db, ckey, text);
+      if (waitUntil) waitUntil(p); else await p;
+    }
     return new Response(text, { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Cache': 'MISS' } });
   }
   return json(out);

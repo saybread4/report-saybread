@@ -4,7 +4,7 @@ import { isPusat, canRankBam } from '../auth.js';
 import { HttpError } from '../http.js';
 import { bamWhere } from '../scope.js';
 import { lastUpdated } from '../dataupdates.js';
-import { norm, nz, num } from '../util.js';
+import { norm, nz, num, RawJson } from '../util.js';
 import {
   arr, str, ymd, NORM, inList, rnd, chunks, queryAll, PAGE, allowedNorm, scopedKs, datesInfo, tglRows, overrides, tokoMap,
 } from '../ks.js';
@@ -69,8 +69,28 @@ const parseTk = (tk) => {
   try { return JSON.parse(tk); } catch { return [tk]; }
 };
 
+// ---- Jalur cepat Stock: kamus & baris disusun oleh DATABASE (GROUP BY), bukan dengan memindai ratusan ribu baris di Worker ----------
+// Memindai seluruh mv_stock_idx (~195 ribu baris) DUA kali (getmeta + getrows) setiap cache habis -- yaitu tepat setelah \"Perbarui Dashboard\" --
+// memakai banyak CPU/memori Worker dan puluhan subrequest, sehingga Cloudflare menjawab HTTP 503. Jalur cepat ini hanya mengirim ratusan
+// baris kamus + satu teks JSON per halaman; jalur lama (stockEach) tetap ada sebagai cadangan bila SQL-nya ditolak database.
+function stockScope(user) {
+  if (isPusat(user)) return { sql: '1=1', params: [] };
+  const w = bamWhere(user, 'x.bam');
+  return { sql: `${NORM('kode')} IN (SELECT ${NORM('x.kode')} FROM toko x WHERE ${w.sql})`, params: w.params };
+}
+
+// { cab: [{k, v}...], ... } urut k naik. k = indeks asli (hash), v = nilai pertama. Dibaca per halaman (driver memotong 10.000 baris tanpa galat).
+async function stockKeys(db, user) {
+  const sc = stockScope(user), out = {};
+  for (const [name, col, icol] of DIM) {
+    const v = name === 'tk' ? 'MIN(CAST(tk AS CHAR))' : `MIN(${col})`;
+    out[name] = await queryAll(db, `SELECT ${icol} AS k, ${v} AS v FROM mv_stock_idx WHERE ${sc.sql} GROUP BY ${icol}`, sc.params, 'k');
+  }
+  return out;
+}
+
 // Kamus filter: indeks -> nilai, urut indeks asli (indeks lama bisa berlubang setelah disaring per area; getrows memetakannya ulang 0..n-1).
-async function stockDictionaries(db, user) {
+async function stockDictionariesSlow(db, user) {
   const seen = {};
   for (const [name] of DIM) seen[name] = new Map();
   await stockEach(db, user,
@@ -85,10 +105,20 @@ async function stockDictionaries(db, user) {
   for (const [name] of DIM) d[name] = [...seen[name].keys()].sort((x, y) => x - y).map((k) => seen[name].get(k));
   return d;
 }
+async function stockDictionaries(db, user) {
+  try {
+    const keys = await stockKeys(db, user), d = {};
+    for (const [name] of DIM) d[name] = keys[name].map((r) => (name === 'tk' ? parseTk(r.v) : r.v));
+    return d;
+  } catch (e) {
+    console.error('kamus stock (jalur cepat) gagal, memakai cara lama:', e && e.message);
+    return stockDictionariesSlow(db, user);
+  }
+}
 
 // Semua baris angka untuk halaman Stock, indeks dimetakan ulang 0..n-1: [cab, bas, as, tk, ds, jn, qty, qpd, md].
 const ROW_POS = { cab: 0, bas: 1, as: 2, tk: 3, ds: 4, jn: 5, md: 8 };
-async function stockNumericRows(db, user) {
+async function stockNumericRowsSlow(db, user) {
   const out = [], used = {};
   for (const [name] of DIM) used[name] = new Set();
   await stockEach(db, user, 'kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md', (rows) => {
@@ -102,6 +132,43 @@ async function stockNumericRows(db, user) {
   for (const [name] of DIM) remap[name] = new Map([...used[name]].sort((x, y) => x - y).map((k, i) => [k, i]));
   for (const a of out) for (const [name] of DIM) a[ROW_POS[name]] = remap[name].get(a[ROW_POS[name]]);
   return out;
+}
+
+// Versi cepat: peta indeks dari kamus (SQL), lalu tiap halaman langsung diubah menjadi potongan teks JSON (tanpa array 195 ribu baris).
+async function stockNumericRowsFast(db, user) {
+  const keys = await stockKeys(db, user), map = {};
+  for (const [name] of DIM) map[name] = new Map(keys[name].map((r, i) => [num(r.k), i]));
+  const sc = stockScope(user), COLS = 'qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md';
+  const pieces = [];
+  let last = -1, fast = true;
+  for (let off = 0; ; off += PAGE) {
+    let rows = null;
+    if (fast) {
+      try {
+        rows = await db.query(`SELECT _tidb_rowid AS rid, ${COLS} FROM mv_stock_idx WHERE _tidb_rowid > ? AND ${sc.sql} ORDER BY _tidb_rowid LIMIT ${PAGE}`, [last, ...sc.params]);
+        if (rows.length && rows[rows.length - 1].rid === undefined) { fast = false; rows = null; }
+      } catch (e) { fast = false; rows = null; }
+    }
+    if (rows === null) rows = await db.query(`SELECT ${COLS} FROM mv_stock_idx WHERE ${sc.sql} ORDER BY ${STOCK_ORDER} LIMIT ${PAGE} OFFSET ${off}`, sc.params);
+    else if (rows.length) last = Number(rows[rows.length - 1].rid);
+    const txt = [];
+    for (const r of rows) {
+      const c = map.cab.get(num(r.i_cab)), b = map.bas.get(num(r.i_bas)), a = map.as.get(num(r.i_as)), t = map.tk.get(num(r.i_tk));
+      const d = map.ds.get(num(r.i_ds)), j = map.jn.get(num(r.i_jn)), m = map.md.get(num(r.i_md));
+      if (c === undefined || b === undefined || a === undefined || t === undefined || d === undefined || j === undefined || m === undefined) continue;   // baris baru masuk saat dibaca (refresh berjalan)
+      txt.push(`[${c},${b},${a},${t},${d},${j},${num(r.qty)},${rnd(r.qpd, 2)},${m}]`);
+    }
+    if (txt.length) pieces.push(txt.join(','));
+    if (rows.length < PAGE) break;
+  }
+  return new RawJson('[' + pieces.join(',') + ']');
+}
+async function stockNumericRows(db, user) {
+  try { return await stockNumericRowsFast(db, user); }
+  catch (e) {
+    console.error('baris stock (jalur cepat) gagal, memakai cara lama:', e && e.message);
+    return new RawJson(JSON.stringify(await stockNumericRowsSlow(db, user)));
+  }
 }
 
 // Toko dalam area pengguna, langsung dari tabel toko.
