@@ -1,6 +1,7 @@
 // Fungsi baca yang dipindah dari Supabase (api_get*). Bentuk hasil SAMA dengan fungsi lama;
 // yang berbeda: pembatasan area dilakukan di server (scopedKs / allowedNorm), bukan token browser.
 import { isPusat, canRankBam } from '../auth.js';
+import { HttpError } from '../http.js';
 import { bamWhere } from '../scope.js';
 import { lastUpdated } from '../dataupdates.js';
 import { norm, nz, num } from '../util.js';
@@ -43,11 +44,23 @@ const DIM = [['cab', 'cab', 'i_cab'], ['bas', 'bas', 'i_bas'], ['as', 'as_', 'i_
 // tetapi memuat SEMUA baris + kolom teks sekaligus melebihi batas memori Worker (128 MB) dan membuat SEMUA permintaan yang sedang berjalan
 // gagal dengan HTTP 503. Jadi tabel dibaca per halaman dan tiap halaman langsung dilipat ke struktur kecil; baris mentah tidak disimpan.
 const STOCK_ORDER = 'kode, i_jn, i_ds, i_md, qty';
-async function stockEach(db, user, sql, fold) {
+// Dibaca lewat kunci baris internal TiDB (_tidb_rowid): tiap halaman O(9.000 baris), tanpa mengurutkan seluruh tabel dan tanpa OFFSET yang
+// makin lama makin berat. Bila TiDB menolak (mis. tabel berkunci lain), jatuh ke cara OFFSET dengan urutan tetap.
+async function stockEach(db, user, cols, fold) {
   const ok = await allowedNorm(db, user);
+  const keep = (rows) => (ok === null ? rows : rows.filter((r) => ok.has(norm(r.kode))));
+  let last = -1, fast = true;
   for (let off = 0; ; off += PAGE) {
-    const rows = await db.query(`${sql} ORDER BY ${STOCK_ORDER} LIMIT ${PAGE} OFFSET ${off}`);
-    fold(ok === null ? rows : rows.filter((r) => ok.has(norm(r.kode))));
+    let rows = null;
+    if (fast) {
+      try {
+        rows = await db.query(`SELECT _tidb_rowid AS rid, ${cols} FROM mv_stock_idx WHERE _tidb_rowid > ? ORDER BY _tidb_rowid LIMIT ${PAGE}`, [last]);
+        if (rows.length && rows[rows.length - 1].rid === undefined) { fast = false; rows = null; }   // sumber tanpa rowid (mis. uji)
+      } catch (e) { fast = false; rows = null; }
+    }
+    if (rows === null) rows = await db.query(`SELECT ${cols} FROM mv_stock_idx ORDER BY ${STOCK_ORDER} LIMIT ${PAGE} OFFSET ${off}`);
+    else if (rows.length) last = Number(rows[rows.length - 1].rid);
+    fold(keep(rows));
     if (rows.length < PAGE) break;
   }
 }
@@ -61,7 +74,7 @@ async function stockDictionaries(db, user) {
   const seen = {};
   for (const [name] of DIM) seen[name] = new Map();
   await stockEach(db, user,
-    'SELECT kode, deskripsi, cab, bas, as_, tk, jn, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx',
+    'kode, deskripsi, cab, bas, as_, tk, jn, md, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md',
     (rows) => {
       for (const r of rows) for (const [name, col, icol] of DIM) {
         const m = seen[name], k = num(r[icol]);
@@ -78,7 +91,7 @@ const ROW_POS = { cab: 0, bas: 1, as: 2, tk: 3, ds: 4, jn: 5, md: 8 };
 async function stockNumericRows(db, user) {
   const out = [], used = {};
   for (const [name] of DIM) used[name] = new Set();
-  await stockEach(db, user, 'SELECT kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md FROM mv_stock_idx', (rows) => {
+  await stockEach(db, user, 'kode, qty, qpd, i_cab, i_bas, i_as, i_tk, i_ds, i_jn, i_md', (rows) => {
     for (const r of rows) {
       const a = [num(r.i_cab), num(r.i_bas), num(r.i_as), num(r.i_tk), num(r.i_ds), num(r.i_jn), num(r.qty), rnd(r.qpd, 2), num(r.i_md)];
       for (const [name] of DIM) used[name].add(a[ROW_POS[name]]);
@@ -480,7 +493,11 @@ export const readHandlers = {
       const want = new Set(wantRaw.map(norm));
       const [ks, tk, dt] = await Promise.all([scopedKs(db, user), tokoMap(db), datesInfo(db)]);
       const lab = (x) => (nz(x) === '' ? '(kosong)' : nz(x));
-      const G = canRankBam(user) ? RANK_G : RANK_G.filter((g) => g !== 'bam');   // grup BAM hanya untuk Koorbam / Admin Koorbam / Administrator / Admin Utama
+      // Grup BAM hanya untuk Koorbam / Admin Koorbam / Administrator / Admin Utama, dan dihitung terpisah hanya saat tabnya dibuka (a[3] === 'bam'):
+      // pemuatan Rank biasa tetap 6 grup (24 query) seperti semula; BAM menambah 4 query hanya bila diminta.
+      const wantBam = a[3] === 'bam';
+      if (wantBam && !canRankBam(user)) throw new HttpError(403, 'Anda tidak punya akses untuk ini.', 'FORBIDDEN');
+      const G = wantBam ? ['bam'] : RANK_G.filter((g) => g !== 'bam');
       const stores = [];
       for (const v of ks) {
         if (!(allsc || want.has(norm(v.cabang)))) continue;

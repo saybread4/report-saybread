@@ -7,6 +7,9 @@ Status: **tahap 1j — Rank BAM, perbaikan Stock >10.000 baris, hemat RU**. Tes:
 - **Stock**: `mv_stock_idx` dibaca per halaman dan tiap halaman langsung dilipat (`stockEach`, `stockDictionaries`, `stockNumericRows`), baris mentah tidak disimpan. Sebelumnya `db.query` memotong diam-diam di 10.000 baris sehingga sebagian toko tidak muncul; memuat semuanya sekaligus (`queryAll`) melebihi memori Worker -> HTTP 503 untuk SEMUA permintaan.
 - `CACHE_REV` di `readcache.js`: naikkan setiap bentuk keluaran fungsi `get*` berubah.
 
+- **Stock dibaca lewat `_tidb_rowid`** (kunci baris internal TiDB; tanpa mengurutkan seluruh tabel per halaman), otomatis jatuh ke cara OFFSET bila ditolak.
+- **Grup Rank BAM dimuat terpisah** (`getRankCab(..., 'bam')`, hanya saat tab BAM dibuka atau Excel Rank diunduh): pemuatan Rank biasa tetap 6 grup / 24 query.
+
 ## Tahap 1i — hemat RU TiDB Cloud (kuota gratis Starter: 50 juta RU / bulan / instance)
 **Tidak ada migrasi SQL.** Tabel `mv_meta` dibuat otomatis saat refresh pertama. Cukup deploy.
 

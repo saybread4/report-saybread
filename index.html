@@ -3404,7 +3404,8 @@ const GR=['cab','pnl','bam','bas','bastr','am','as'],GL={cab:'CABANG',pnl:'CAB P
 function prepRD(r){
   const tot=new Map();
   const add=(m,x)=>{const d=r.dates[x[1]];let o=m.get(d);if(!o)m.set(d,o=[0,0,0,0,0]);o[0]+=x[2];o[1]+=x[3];o[2]+=x[4];if(x[5]>o[3])o[3]=x[5];o[4]+=x[6]};   // o[4] = jumlah toko yang SALES_QTY-nya > 0
-  GR.forEach(k=>{const g=r[k];if(!g)return;g.per=g.names.map(()=>new Map());g.rows.forEach(x=>add(g.per[x[0]],x))});
+  const prepG=k=>{const g=r[k];if(!g||g.per)return;g.per=g.names.map(()=>new Map());g.rows.forEach(x=>add(g.per[x[0]],x))};
+  r._prepG=prepG;GR.forEach(prepG);
   r.cab.rows.forEach(x=>tot.set(r.dates[x[1]],(tot.get(r.dates[x[1]])||0)+x[2]));
   r.months=[...new Set(r.dates.map(d=>d.slice(0,7)))].sort();r.last={};
   r.months.forEach(k=>{let l=0,lq=0;r.dates.forEach(d=>{if(d.slice(0,7)!==k)return;const day=+d.slice(8);if(day>l)l=day;if((tot.get(d)||0)>0&&day>lq)lq=day});r.last[k]=lq||l});
@@ -3467,6 +3468,14 @@ function rankCalc(grp){
   return{grp,x,L,tc,tp,tg:rgr(tc,tp),tv:rvr(tc,tp)};
 }
 const rkOneCab=()=>!!(RD&&RD.cab&&RD.cab.names.filter(n=>n!=='(kosong)').length===1);   // hanya 1 cabang: tab Cabang PNL sama dengan Cabang, jadi disembunyikan
+/* Grup BAM dimuat terpisah saat tabnya dibuka (4 query tambahan), supaya pemuatan Rank biasa tidak lebih berat. */
+function loadRankBam(){
+  const cur=RD,key=rkKey();
+  if(cur._bamP)return;
+  $('#rOut').innerHTML=spin();
+  cur._bamP=gsr('getRankCab',rkCabs(),TOKEN,false,'bam').then(b=>{cur.bam=b.bam;cur._prepG('bam');cur._bamP=null;if(RD===cur&&TAB==='Rank')renderR()})
+    .catch(e=>{cur._bamP=null;if(RD===cur&&TAB==='Rank')$('#rOut').innerHTML='<div class="card empty err" style="margin-top:8px">Gagal memuat Rank BAM:\n'+esc((e&&e.message)||e)+'</div>'});
+}
 function renderR(){
   RCUR=null;$('#dlR button').disabled=true;
   if(!RD)return;
@@ -3475,6 +3484,7 @@ function renderR(){
   {const okB=!!(ME&&ME.can&&ME.can.rankbam),bb=document.querySelector('#rGrp [data-s="bam"]');   // Rank BAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
    if(bb)bb.style.display=okB?'':'none';
    if(!okB&&RGRP==='bam'){RGRP='cab';document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x.dataset.s==='cab'))}}
+  if(RGRP==='bam'&&!RD.bam){loadRankBam();return}
   const g=RD[RGRP],gname=GL[RGRP];
   if(!g){$('#rOut').innerHTML='<div class="card empty err" style="margin-top:8px">Data Rank belum lengkap. Pastikan Code.gs versi terbaru sudah di-deploy ulang.</div>';return}
   $('#rInfo').innerHTML='<div class="info2"><span><small>CAKUPAN</small><b>'+esc(rkScope())+'</b></span><span><small>JML '+gname+'</small><b>'+nf(g.names.length)+'</b></span><span><small>PEMBANDING</small><b>'+(RCMP==='off'?'Tanpa':RCMP==='closing'?'Closing bulan lalu':'Tgl yang sama')+'</b></span></div>';
@@ -3859,6 +3869,7 @@ async function rdEnsure(){
   if(RD)return RD;
   const k=rkKey();let r=RDC.get(k);
   if(!r){r=await gsr('getRankCab',rkCabs(),TOKEN,false);prepRD(r);RDC.set(k,r)}
+  if(ME&&ME.can&&ME.can.rankbam&&!r.bam){const b=await gsr('getRankCab',rkCabs(),TOKEN,false,'bam');r.bam=b.bam;r._prepG('bam')}   // sheet Rank BAM ikut Excel
   return RD=r;
 }
 async function masterExcel(o){

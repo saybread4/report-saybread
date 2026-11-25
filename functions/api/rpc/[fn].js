@@ -7,7 +7,9 @@ import { requireUser, can } from '../../_lib/auth.js';
 import { handlers } from '../../_lib/handlers/index.js';
 import { cacheable, dataVersion, cacheKey, cacheGet, cachePut } from '../../_lib/readcache.js';
 
-export async function handle({ request, env, params, waitUntil }, db) {
+export async function handle(ctx, db) {
+  const { request, env, params } = ctx;
+  const waitUntil = typeof ctx.waitUntil === 'function' ? (p) => ctx.waitUntil(p) : null;   // tidak boleh dipanggil lepas dari ctx (Illegal invocation)
   checkOrigin(request);
   const user = await requireUser(db, request);
   const raw = Array.isArray(params.fn) ? params.fn[0] : params.fn;

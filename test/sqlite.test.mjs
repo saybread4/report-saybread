@@ -96,12 +96,14 @@ function flatten(out) {
   return res;
 }
 
+const rankAll = async (db, user, a = [[]]) => ({ ...(await handlers.getrankcab.run({ db, user }, a)), bam: (await handlers.getrankcab.run({ db, user }, [a[0], '', false, 'bam'])).bam });
+
 const users = { pusat: { jabatan: 'ADMIN_PUSAT', bam_scope: [] }, bamA: { jabatan: 'KOORBAM', bam_scope: ['BAM A'] }, admin: { jabatan: 'ADMINISTRATOR', bam_scope: [] } };
 
 for (const [nama, user] of Object.entries(users)) {
   test(`Rank (${nama}): hasil agregasi di database = perhitungan acuan, termasuk kode ber-spasi`, async () => {
     let data; const db = sqliteDb((raw) => { data = rankData(raw); });
-    const out = await handlers.getrankcab.run({ db, user }, [[]]);
+    const out = await rankAll(db, user);
     assert.ok(db.log.some((s) => /GROUP BY s\.\w+, t\.tanggal/.test(s)), 'harus memakai agregasi SQL');
     assert.deepEqual(flatten(out), expected(data, user, null));
     // baris November (kode ber-spasi) harus ikut terhitung
@@ -113,16 +115,16 @@ for (const [nama, user] of Object.entries(users)) {
   test(`Rank (${nama}): cara lama (cadangan) menghasilkan angka yang sama`, async () => {
     let data; const db = sqliteDb((raw) => { data = rankData(raw); });
     const lama = { ...db, async query(sql, a) { if (/GROUP BY s\.\w+, t\.tanggal/.test(sql)) throw new Error('simulasi: SQL agregasi gagal'); return db.query(sql, a); } };
-    const out = await handlers.getrankcab.run({ db: lama, user }, [[]]);
+    const out = await rankAll(lama, user);
     assert.deepEqual(flatten(out), expected(data, user, null));
-    const baru = await handlers.getrankcab.run({ db, user }, [[]]);
+    const baru = await rankAll(db, user);
     assert.deepEqual(out, baru);
   });
 }
 
 test('Rank: filter cabang terpilih', async () => {
   let data; const db = sqliteDb((raw) => { data = rankData(raw); });
-  const out = await handlers.getrankcab.run({ db, user: users.pusat }, [['Malang', 'KEDIRI']]);
+  const out = await rankAll(db, users.pusat, [['Malang', 'KEDIRI']]);
   assert.deepEqual(flatten(out), expected(data, users.pusat, ['MALANG', 'KEDIRI']));
   assert.deepEqual([...out.cab.names].sort(), ['KEDIRI', 'MALANG']);
 });

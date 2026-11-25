@@ -29,3 +29,34 @@ test('Stock: getmeta menyusun kamus dari SEMUA halaman (700 toko, 30 deskripsi) 
   assert.equal(m.d.tk.length, 700); assert.equal(m.d.ds.length, 30);
   assert.deepEqual(m.d.tk[699], ['K699', 'Toko 699']);
 });
+
+test('Stock: halaman dibaca lewat _tidb_rowid (tanpa OFFSET/ORDER BY tabel penuh) dan hasilnya lengkap', async () => {
+  const sqls = [];
+  const dbk = {
+    async query(sql, a = []) {
+      if (!/FROM mv_stock_idx/.test(sql)) return [];
+      sqls.push(sql);
+      const m = /_tidb_rowid > \?.*LIMIT (\d+)/.exec(sql);
+      assert.ok(m, 'harus memakai _tidb_rowid');
+      const start = a[0] + 1;
+      return all.slice(start, start + +m[1]).map((r, i) => ({ ...r, rid: start + i }));
+    },
+    async exec() {},
+  };
+  const rows = await handlers.getrows.run({ db: dbk, user: PUSAT }, []);
+  assert.equal(rows.length, TOTAL);
+  assert.ok(sqls.every((q) => !/OFFSET/.test(q)));
+});
+
+test('Stock: bila _tidb_rowid ditolak, jatuh ke cara OFFSET dan tetap lengkap', async () => {
+  const dbf = {
+    async query(sql) {
+      if (!/FROM mv_stock_idx/.test(sql)) return [];
+      if (/_tidb_rowid/.test(sql)) throw new Error('Unknown column _tidb_rowid');
+      const m = /LIMIT (\d+) OFFSET (\d+)/.exec(sql);
+      return all.slice(+m[2], +m[2] + +m[1]);
+    },
+    async exec() {},
+  };
+  assert.equal((await handlers.getrows.run({ db: dbf, user: PUSAT }, [])).length, TOTAL);
+});

@@ -13,7 +13,7 @@ import { isPusat } from './auth.js';
 
 const TTL_BUCKET_MS = 6 * 3600 * 1000;
 // Naikkan angka ini setiap kali BENTUK keluaran fungsi get* berubah (mis. menambah grup Rank BAM), supaya hasil lama di cache tidak dipakai.
-const CACHE_REV = '6';
+const CACHE_REV = '7';
 const MEM = new Map();            // kunci -> teks JSON (urutan masuk = urutan paling lama dulu)
 let memBytes = 0;
 const MEM_MAX_BYTES = 8 * 1024 * 1024;     // kecil dengan sengaja: batas memori Worker 128 MB dipakai bersama semua permintaan
