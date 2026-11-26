@@ -13,7 +13,11 @@ import { isPusat } from './auth.js';
 
 const TTL_BUCKET_MS = 6 * 3600 * 1000;
 // Naikkan angka ini setiap kali BENTUK keluaran fungsi get* berubah (mis. menambah grup Rank BAM), supaya hasil lama di cache tidak dipakai.
-const CACHE_REV = '8';   // 8: gethistory/gethistori dibaca per halaman (sebelumnya terpotong di 10.000 baris, hasil lamanya ikut tersimpan di cache)
+const CACHE_REV = '7';
+// Revisi per fungsi: hanya fungsi yang BENTUK/ISI keluarannya berubah yang dinaikkan di sini. Jangan menaikkan CACHE_REV (berlaku untuk SEMUA fungsi):
+// itu membuang cache Rank, Perform, Monitor, dst. sekaligus, lalu semuanya dihitung ulang bersamaan -> HTTP 503 "Worker exceeded resource limits".
+// 8 = gethistory/gethistori dibaca per halaman (sebelumnya terpotong di 10.000 baris dan hasil terpotongnya ikut tersimpan).
+const FN_REV = { gethistory: '8', gethistori: '8' };
 const MEM = new Map();            // kunci -> teks JSON (urutan masuk = urutan paling lama dulu)
 let memBytes = 0;
 const MEM_MAX_BYTES = 8 * 1024 * 1024;     // kecil dengan sengaja: batas memori Worker 128 MB dipakai bersama semua permintaan
@@ -32,7 +36,7 @@ export async function dataVersion(db) {
 
 export async function cacheKey(fn, a, user, version) {
   const scope = isPusat(user) ? 'ALL' : [user.jabatan, ...(user.bam_scope || [])].join('|');
-  return sha256Hex(JSON.stringify([CACHE_REV, fn, a, scope, version, Math.floor(Date.now() / TTL_BUCKET_MS)]));
+  return sha256Hex(JSON.stringify([FN_REV[fn] || CACHE_REV, fn, a, scope, version, Math.floor(Date.now() / TTL_BUCKET_MS)]));
 }
 
 function memPut(key, text) {
