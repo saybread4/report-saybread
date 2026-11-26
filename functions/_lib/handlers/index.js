@@ -2,7 +2,7 @@
 // Semua fungsi baca WAJIB memakai bamWhere()/kodeWhere() supaya data dibatasi sesuai area pengguna.
 //
 import { bamWhere } from '../scope.js';
-import { isPusat, canRankBam, parseScope } from '../auth.js';
+import { canRankBam } from '../auth.js';
 import { norm, nz, num } from '../util.js';
 import { queryAll } from '../ks.js';
 import { readHandlers } from './read.js';
@@ -49,22 +49,23 @@ const baseHandlers = {
     },
   },
 
-  // Daftar KOORBAM beserta BAM di bawahnya, untuk filter halaman Rank. Tabel toko di TiDB belum punya kolom K.BAM, jadi diturunkan dari akun
-  // berjabatan KOORBAM (nama akun + daftar BAM area-nya). Hanya untuk jabatan yang boleh melihat Rank BAM; jabatan lain mendapat daftar kosong.
-  // Pengguna non-pusat hanya melihat BAM dalam areanya sendiri.
+  // Filter KOORBAM di halaman Rank: kombinasi (k_bam, bam, cabang) dari kolom toko.k_bam. Hanya untuk jabatan yang boleh melihat Rank BAM
+  // (jabatan lain mendapat daftar kosong) dan dibatasi area pengguna. Toko tanpa k_bam diabaikan (di layar: "(Belum ada KOORBAM)").
+  // Bila kolom k_bam belum ada di tabel toko, hasilnya kosong + warn (filter KOORBAM kosong, filter lain tetap jalan).
   getkoorbam: {
     need: 'view',
     async run({ db, user }) {
       if (!canRankBam(user)) return { list: [] };
-      const mine = isPusat(user) ? null : new Set((user.bam_scope || []).map((x) => String(x).trim().toUpperCase()));
-      const rows = await db.query("SELECT nama, bam_scope FROM users WHERE jabatan = 'KOORBAM' AND aktif = 1 ORDER BY nama");
-      const list = [];
-      for (const r of rows) {
-        let bams = (parseScope(r.bam_scope) || []).map((x) => String(x).trim()).filter(Boolean);
-        if (mine) bams = bams.filter((b) => mine.has(b.toUpperCase()));
-        if (bams.length) list.push([String(r.nama || '').trim(), bams]);
+      const w = bamWhere(user, 'bam');
+      try {
+        const rows = await queryAll(db,
+          `SELECT TRIM(k_bam) AS kb, TRIM(bam) AS bam, TRIM(cabang) AS cab FROM toko
+            WHERE ${w.sql} AND TRIM(COALESCE(k_bam, '')) NOT IN ('', '0') GROUP BY TRIM(k_bam), TRIM(bam), TRIM(cabang)`,
+          w.params, 'kb, bam, cab');
+        return { list: rows.map((r) => [String(r.kb), String(r.bam == null ? '' : r.bam), String(r.cab == null ? '' : r.cab)]) };
+      } catch (e) {
+        return { list: [], warn: 'Kolom k_bam belum ada di tabel toko.' };
       }
-      return { list };
     },
   },
 

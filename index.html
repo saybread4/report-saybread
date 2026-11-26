@@ -3398,19 +3398,26 @@ function ensureFR(){
   return FRP||(FRP=(async()=>{
     const okB=!!(ME&&ME.can&&ME.can.rankbam);
     let meta=null;try{meta=scopeMeta(await gsr('getCabMeta',false))}catch(e){}   // langsung dari server (bukan simpanan Trend) supaya sesuai cakupan sekarang
-    let kbl=[];if(okB){try{kbl=((await gsr('getKoorbam'))||{}).list||[]}catch(e){kbl=[]}}
-    const kbN=kbl.map(x=>x[0]),NOKB='(Belum ada KOORBAM)';let noKb=-1;
-    const bamN=(GB&&GB.bam)||[],pnlN=meta?meta.pnl.map(x=>x||'(kosong)'):[],cabN=meta?meta.cab.map(x=>x||'(kosong)'):[];
+    let kbl=[];if(okB){try{kbl=((await gsr('getKoorbam'))||{}).list||[]}catch(e){kbl=[]}}   // [[k_bam, bam, cabang]...]
+    const NOKB='(Belum ada KOORBAM)',kbN=[...new Set(kbl.map(x=>x[0]))].sort(CO);let noKb=-1;
+    const bamN=((GB&&GB.bam)||[]).slice(),pnlN=meta?meta.pnl.map(x=>x||'(kosong)'):[],cabN=meta?meta.cab.map(x=>x||'(kosong)'):[];
+    const bi=new Map(bamN.map((b,i)=>[norm(b),i])),kbi=new Map(kbN.map((k,i)=>[k,i]));
     const cm=new Map();if(meta)meta.cab.forEach((n,i)=>{const k=norm(n);if(!cm.has(k))cm.set(k,i)});
     const pc=new Map();if(meta)(meta.pairs||[]).forEach(([p,c])=>{if(!pc.has(c))pc.set(c,[]);pc.get(c).push(p)});
-    const kbOf=bamN.map(b=>{const o=[];kbl.forEach((x,i)=>{if(x[1].some(y=>norm(y)===norm(b)))o.push(i)});return o});
-    const rows=[],seen=new Set();
-    ((GB&&GB.rows)||[]).forEach(([bi,ci])=>{
-      const nm=GB.cab[ci];if(SCOPE&&!SCOPE.all&&!SCOPE.cabs.has(norm(nm)))return;
-      const mc=cm.get(norm(nm));if(mc===undefined)return;
-      let ks=kbOf[bi];if(!ks.length){if(noKb<0){noKb=kbN.length;kbN.push(NOKB)}ks=[noKb]}
-      for(const p of pc.get(mc)||[])for(const k of ks){const key=k+'_'+bi+'_'+p+'_'+mc;if(seen.has(key))continue;seen.add(key);rows.push([k,bi,p,mc])}
+    const rows=[],seen=new Set(),cov=new Set();
+    const add=(k,b,mc)=>{for(const p of pc.get(mc)||[]){const key=k+'_'+b+'_'+p+'_'+mc;if(seen.has(key))continue;seen.add(key);rows.push([k,b,p,mc])}};
+    const inScope=nm=>!SCOPE||SCOPE.all||SCOPE.cabs.has(norm(nm));
+    kbl.forEach(([k,bm,cb])=>{   // KOORBAM dari kolom toko.k_bam (sudah per BAM + cabang)
+      if(!inScope(cb))return;const mc=cm.get(norm(cb));if(mc===undefined)return;
+      let b=bi.get(norm(bm));if(b===undefined){b=bamN.length;bamN.push(bm);bi.set(norm(bm),b)}
+      cov.add(b+'_'+mc);add(kbi.get(k),b,mc);
     });
+    if(okB)((GB&&GB.rows)||[]).forEach(([b,ci])=>{   // pasangan BAM+cabang yang tokonya belum punya k_bam
+      const nm=GB.cab[ci];if(!inScope(nm))return;const mc=cm.get(norm(nm));if(mc===undefined||cov.has(b+'_'+mc))return;
+      if(noKb<0){noKb=kbN.length;kbN.push(NOKB)}
+      add(noKb,b,mc);
+    });
+    if(!okB)((GB&&GB.rows)||[]).forEach(([b,ci])=>{const nm=GB.cab[ci];if(!inScope(nm))return;const mc=cm.get(norm(nm));if(mc!==undefined)add(0,b,mc)});
     const dl={kb:kbN,bam:bamN,pnl:pnlN,cab:cabN},rk={};
     for(const k in dl){const ix=dl[k].map((_,i)=>i).sort((a,b)=>k==='kb'&&dl[k][a]===NOKB?1:k==='kb'&&dl[k][b]===NOKB?-1:CO(dl[k][a],dl[k][b]));rk[k]=[];ix.forEach((v,r)=>rk[k][v]=r)}
     const keys=okB?['kb','bam','pnl','cab']:['bam','pnl','cab'];

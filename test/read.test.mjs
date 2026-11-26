@@ -268,15 +268,16 @@ test('Rank BAM (grup bam): dimuat terpisah (a[3]=bam); hanya Koorbam, Admin Koor
   }
 });
 
-test('getkoorbam: daftar KOORBAM dari akun berjabatan KOORBAM; non-pusat hanya BAM dalam areanya; jabatan tanpa hak Rank BAM mendapat daftar kosong', async () => {
-  const db = mock([[/FROM users WHERE jabatan = 'KOORBAM'/, [
-    { nama: 'Andi', bam_scope: JSON.stringify(['BAM A', 'BAM B']) },
-    { nama: 'Budi', bam_scope: JSON.stringify(['BAM C']) },
-    { nama: 'Kosong', bam_scope: null },
-  ]]]);
+test('getkoorbam: (k_bam, bam, cabang) dari kolom toko.k_bam; jabatan tanpa hak Rank BAM kosong; kolom belum ada -> kosong + warn', async () => {
+  const sqls = [];
+  const db = mock([[/FROM toko/, (q, a) => { sqls.push({ q, a }); return [{ kb: 'RUT', bam: 'NEH', cab: 'YOGYAKARTA (G020)' }, { kb: 'AJI', bam: 'FHN', cab: 'PARUNG (G107)' }]; }]]);
   const all = await handlers.getkoorbam.run({ db, user: { jabatan: 'ADMINISTRATOR', bam_scope: null } }, []);
-  assert.deepEqual(all.list, [['Andi', ['BAM A', 'BAM B']], ['Budi', ['BAM C']]]);
-  const mine = await handlers.getkoorbam.run({ db, user: { jabatan: 'KOORBAM', bam_scope: ['BAM A'] } }, []);
-  assert.deepEqual(mine.list, [['Andi', ['BAM A']]]);
-  assert.deepEqual((await handlers.getkoorbam.run({ db, user: { jabatan: 'BAS', bam_scope: ['BAM A'] } }, [])).list, []);
+  assert.deepEqual(all.list, [['RUT', 'NEH', 'YOGYAKARTA (G020)'], ['AJI', 'FHN', 'PARUNG (G107)']]);
+  assert.match(sqls[0].q, /k_bam/);
+  await handlers.getkoorbam.run({ db, user: { jabatan: 'KOORBAM', bam_scope: ['NEH'] } }, []);
+  assert.deepEqual(sqls[1].a, ['NEH']);                                   // dibatasi area pengguna
+  assert.deepEqual((await handlers.getkoorbam.run({ db, user: { jabatan: 'BAS', bam_scope: ['NEH'] } }, [])).list, []);
+  const nocol = mock([[/FROM toko/, () => { throw new Error("Unknown column 'k_bam'"); }]]);
+  const r = await handlers.getkoorbam.run({ db: nocol, user: { jabatan: 'ADMINISTRATOR', bam_scope: null } }, []);
+  assert.deepEqual(r.list, []); assert.ok(r.warn);
 });
