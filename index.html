@@ -732,7 +732,6 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <button data-p="Cabang">Perform Cabang</button>
     <button data-p="BAS">Monitor Area</button>
     <button data-p="Trend">Trend / History</button>
-    <button data-p="PNL">PNL Cabang</button>
   </nav>
   <div class="mbox">
     <div class="chip" id="scp" style="display:none;cursor:pointer" title="Klik untuk memilih BAM / cabang lagi"></div>
@@ -883,10 +882,6 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <div id="tdOut"></div>
   </section>
 
-  <!-- ===== Halaman PNL Cabang (tabel pnl_cabang) ===== -->
-  <section class="page" id="pgPNL">
-    <div id="pnOut"></div>
-  </section>
 </div></main>
 
 <div id="toast"></div>
@@ -1470,10 +1465,7 @@ document.querySelectorAll('nav button[data-p]').forEach(b=>b.onclick=()=>{
   if(onMon()){setMode(TAB==='Cabang'?'cabang':'toko');monSelect()}
   if(TAB==='BAS')basSelect();
   if(TAB==='Rank')rankSelect();
-  if(TAB==='PNL'){$('#tdOut').innerHTML=''}
-  if(TAB==='Trend'){$('#pnOut').innerHTML=''}
   if(TAB==='Trend')trendOpen();
-  if(TAB==='PNL')pnlOpen();
 });
 let forceM=false,forceT=false,forceMeta=false,forceTr=false,forceG=false,GEM=null,GEMBUSY=false,BGC=new Map(),BG=null,BGMODE='dow',forceBg=false;   // GEM = Set tanggal Gempar 'yyyy-MM-dd'
 /* chip di header: waktu data terakhir diperbarui. Persen muat baris ditulis di #updP (bukan menimpa seluruh chip). */
@@ -4679,7 +4671,7 @@ function dlBgt(f){const R=window.BGT;if(!R){toast('Data budged toko belum siap')
    Bulan berjalan (opsional) dihitung fungsi yang sama dari data harian seluruh toko (histori trend sudah lengkap).
    Daftar cabang/toko mengikuti akses (scopeMeta) seperti halaman lain. */
 const TRC=new Map();let TRM=null,TD=null,TQKEY='',TQG=null;
-const TRS={pnl:'',cab:'',kode:'',q:'',m:'spd',cmp:2,yr:0,rm:0,rs:'g',all:false,hide:{},cur:false};
+const TRS={pnl:'',cab:'',kode:'',q:'',m:'spd',cmp:2,yr:0,rm:0,rs:'g',all:false,hide:{},cur:false,applied:false};
 const TQB=['JAN','FEB','MAR','APR','MEI','JUN','JUL','AGU','SEP','OKT','NOV','DES'];
 const TQN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const TQC=['#0f766e','#f59e0b','#6366f1'];
@@ -4707,14 +4699,15 @@ const tqLy=(m,Yb,L)=>tqBig(m)&&tqPart(Yb,L)?L-1:L;
 const tqYs=Yb=>[Yb,Yb-1,Yb-2].slice(0,TRS.cmp+1).filter(y=>y===Yb||TD.by[y]);
 const tqYtd=(y,L,m)=>{const a={rp:0,hr:0,ba:0,n:0,mg:0,qy:0,pn:0,np:0,c:0};for(let i=1;i<=L;i++){const x=tqBy(y,i);if(x){a.rp+=x.rp;a.hr+=x.hr;a.ba+=x.ba;a.n+=x.n;a.mg+=x.mg;a.qy+=x.qy||0;if(x.pn!=null){a.pn+=x.pn;a.np++}a.c++}}return a.c?tqV(m,{rp:a.rp,hr:a.hr,ba:a.ba,mg:a.mg,qy:a.qy,pn:a.np?a.pn:null,n:a.n/a.c}):null};
 const tqCell=(y,k,m)=>{const v=tqVal(y,k,m);return v==null?'':tqT(m,v)+(tqPart(y,k)?'*':'')};
-window.trendReset=()=>{TRC.clear();TRM=null;TD=null;PND=null;if(TAB==='Trend')trendOpen();if(TAB==='PNL')pnlOpen()};
+window.trendReset=()=>{TRC.clear();TRM=null;TD=null;PND=null;if(TAB==='Trend')trendOpen()};
 async function trendMeta(){if(TRM)return TRM;if(CMETA){TRM=CMETA;return TRM}TRM=scopeMeta(await gsr('getCabMeta',false));return TRM}
 async function trendOpen(){
   const root=$('#tdOut');
   if(!root.dataset.e){root.dataset.e=1;tqEvents(root)}
   if(!root.firstChild)root.innerHTML='<div class="tq"><div class="tqf" id="tqF"></div><div id="tqBody"></div></div>';
   try{await trendMeta()}catch(e){$('#tqBody').innerHTML='<div class="card empty err" style="margin-top:8px">Gagal memuat daftar cabang:\n'+esc((e&&e.message)||e)+'</div>';return}
-  tqFilters();trendLoad();
+  tqFilters();
+  $('#tqBody').innerHTML='<div class="card empty" style="margin-top:12px"><div><b>Data belum ditampilkan</b><br>Silakan pilih filter, lalu tekan Terapkan.</div></div>';
 }
 function tqStores(){const m=TRM,pi=TRS.pnl?m.pnl.indexOf(TRS.pnl):-1,ci=TRS.cab?m.cab.indexOf(TRS.cab):-1;return m.stores.filter(s=>(pi<0||s[2]===pi)&&(ci<0||s[3]===ci))}
 function tqFilters(){
@@ -4728,7 +4721,7 @@ function tqFilters(){
     +`<label>BANDINGKAN<span class="tqseg" id="tqCmp"><button data-c="1" class="${TRS.cmp===1?'on':''}">1 tahun lalu</button><button data-c="2" class="${TRS.cmp===2?'on':''}">2 tahun lalu</button></span></label>`
     +(yrs.length?`<label>TAHUN<select id="tqYr">${yrs.map(y=>`<option value="${y}"${y===Yb?' selected':''}>${y}</option>`).join('')}</select></label>`:'')
     +`<label class="tqsw${hasCur?'':' off'}" title="${hasCur?'Tambahkan bulan yang sedang berjalan dari data harian':'Belum ada bulan berjalan di luar histori'}"><input type="checkbox" id="tqCur"${TRS.cur&&hasCur?' checked':''}${hasCur?'':' disabled'}><span>Tampilkan bulan berjalan</span></label>`
-    +`<label>&nbsp;<span class="tqdl"><button id="tqRs">Reset</button></span></label>`;
+    +`<label>&nbsp;<span class="tqdl"><button id="tqApply" class="b p">Terapkan</button><button id="tqRs">Reset</button></span></label>`;
 }
 function tqArgs(){
   const m=TRM,scoped=SCOPE&&!SCOPE.all;let cabs=[];
@@ -4947,16 +4940,16 @@ async function tqXlsx(){
 }
 function tqPick(v){
   v=String(v||'').trim();
-  if(!v){TRS.kode='';TRS.q='';trendLoad();return}
+  if(!v){TRS.kode='';TRS.q='';TRS.applied=false;TD=null;TQKEY='';tqFilters();$('#tqBody').innerHTML='<div class="card empty" style="margin-top:12px">Tekan Terapkan untuk memuat data.</div>';return}
   const S=tqStores(),u=tqU(v);let s=S.find(x=>(x[0]+' · '+x[1])===v)||S.find(x=>tqU(x[0])===u);
   if(!s){const f=S.filter(x=>tqU(x[1]).includes(u));if(f.length===1)s=f[0]}
   if(!s){toast('Toko tidak ditemukan pada pilihan ini. Pilih dari daftar saran.',3500);return}
-  TRS.kode=s[0];TRS.q=s[0]+' · '+s[1];trendLoad();
+  TRS.kode=s[0];TRS.q=s[0]+' · '+s[1];TRS.applied=false;TD=null;TQKEY='';tqFilters();$('#tqBody').innerHTML='<div class="card empty" style="margin-top:12px">Tekan Terapkan untuk memuat data.</div>'; 
 }
 function tqEvents(root){
   root.addEventListener('change',e=>{const t=e.target,id=t.id;
-    if(id==='tqPnl'){TRS.pnl=t.value;TRS.cab='';TRS.kode='';TRS.q='';tqFilters();trendLoad()}
-    else if(id==='tqCab'){TRS.cab=t.value;TRS.kode='';TRS.q='';tqFilters();trendLoad()}
+    if(id==='tqPnl'){TRS.pnl=t.value;TRS.cab='';TRS.kode='';TRS.q='';TRS.applied=false;TD=null;TQKEY='';tqFilters();$('#tqBody').innerHTML='<div class="card empty" style="margin-top:12px">Tekan Terapkan untuk memuat data.</div>'}
+    else if(id==='tqCab'){TRS.cab=t.value;TRS.kode='';TRS.q='';TRS.applied=false;TD=null;TQKEY='';tqFilters();$('#tqBody').innerHTML='<div class="card empty" style="margin-top:12px">Tekan Terapkan untuk memuat data.</div>'}
     else if(id==='tqTk')tqPick(t.value);
     else if(id==='tqYr'){TRS.yr=+t.value;TRS.rm=0;tqRender()}
     else if(id==='tqCur'){TRS.cur=t.checked;TRS.rm=0;tqRender()}
@@ -4970,7 +4963,8 @@ function tqEvents(root){
     else if(b=t.closest('.tqkc')){TRS.m=b.dataset.m;tqRender()}
     else if(b=t.closest('.tqlg')){const y=b.dataset.y;TRS.hide[y]=!TRS.hide[y];tqRender()}
     else if(t.closest('#tqAll')){TRS.all=!TRS.all;tqRender()}
-    else if(t.closest('#tqRs')){Object.assign(TRS,{pnl:'',cab:'',kode:'',q:'',yr:0,rm:0,rs:'g',all:false,hide:{},cur:false});tqFilters();trendLoad()}
+    else if(t.closest('#tqApply')){TRS.applied=true;trendLoad()}
+    else if(t.closest('#tqRs')){Object.assign(TRS,{pnl:'',cab:'',kode:'',q:'',yr:0,rm:0,rs:'g',all:false,hide:{},cur:false,applied:false});TD=null;TQKEY='';tqFilters();$('#tqBody').innerHTML='<div class="card empty" style="margin-top:12px"><div><b>Data belum ditampilkan</b><br>Silakan pilih filter, lalu tekan Terapkan.</div></div>'}
     else if(b=t.closest('[data-d]')){if(!TD)return;b.dataset.d==='jpg'?tqJpg():tqXlsx()}});
 }
 </script>
