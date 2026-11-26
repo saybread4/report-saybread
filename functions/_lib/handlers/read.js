@@ -562,9 +562,12 @@ export const readHandlers = {
       const lab = (x) => (nz(x) === '' ? '(kosong)' : nz(x));
       // Grup BAM hanya untuk Koorbam / Admin Koorbam / Administrator / Admin Utama, dan dihitung terpisah hanya saat tabnya dibuka (a[3] === 'bam'):
       // pemuatan Rank biasa tetap 6 grup (24 query) seperti semula; BAM menambah 4 query hanya bila diminta.
-      const wantBam = a[3] === 'bam';
+      // a[3] = nama satu kelompok ('cab','pnl','bam','bas','bastr','am','as') -> hanya kelompok itu yang dihitung (1/6 beban; dipakai tombol Terapkan
+      // di halaman Rank). Tanpa a[3] = 6 kelompok non-BAM seperti semula (dipakai Master Excel).
+      const one = typeof a[3] === 'string' && RANK_G.includes(a[3]) ? a[3] : null;
+      const wantBam = one === 'bam';
       if (wantBam && !canRankBam(user)) throw new HttpError(403, 'Anda tidak punya akses untuk ini.', 'FORBIDDEN');
-      const G = wantBam ? ['bam'] : RANK_G.filter((g) => g !== 'bam');
+      const G = one ? [one] : RANK_G.filter((g) => g !== 'bam');
       const stores = [];
       for (const v of ks) {
         if (!(allsc || want.has(norm(v.cabang)))) continue;

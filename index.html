@@ -854,7 +854,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
   <!-- ===== Halaman Rank (Cabang, Cabang PNL, BAS, BASTR, AM, AS) ===== -->
   <section class="page on" id="pgRank">
     <div class="subbar">
-      <span class="seg big" id="rGrp"><button data-s="cab" class="on">Cabang</button><button data-s="pnl">Cabang PNL</button><button data-s="bam">BAM</button><button data-s="bas">BAS</button><button data-s="bastr">BASTR</button><button data-s="am">AM</button><button data-s="as">AS</button></span>
+      <div class="subtools" style="margin-left:0"><select id="rGrpSel" class="sel" title="Kelompok yang diranking"><option value="cab">Kelompok: Cabang</option><option value="pnl">Kelompok: Cabang PNL</option><option value="bam">Kelompok: BAM</option><option value="bas">Kelompok: BAS</option><option value="bastr">Kelompok: BASTR</option><option value="am">Kelompok: AM</option><option value="as">Kelompok: AS</option></select><button class="b p" id="rApply" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Terapkan</button></div>
       <div class="subtools">
         <div class="filters" id="fR" style="display:none;width:190px"></div>
         <select id="rBln" class="sel" title="Pilih bulan"></select>
@@ -1011,8 +1011,11 @@ let ME=null,EXPIRED=false;
 async function api(path,body){
   const r=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',
     headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
-  let j=null;try{j=await r.json()}catch(e){}
-  if(!r.ok){const e=new Error((j&&j.message)||('HTTP '+r.status));e.code=j&&j.code;e.status=r.status;throw e}
+  let j=null,tx='';try{tx=await r.text();j=JSON.parse(tx)}catch(e){}
+  if(!r.ok){
+    /* Jawaban non-JSON (mis. 503) datang dari Cloudflare, bukan dari aplikasi: tampilkan petunjuknya (mis. "error code: 1102" = batas CPU/memori Worker). */
+    const hint=j?'':(' — '+tx.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,140)+(r.headers.get('cf-ray')?' [ray '+r.headers.get('cf-ray')+']':'')).replace(/^ — $/,'');
+    const e=new Error((j&&j.message)||('HTTP '+r.status+hint));e.code=j&&j.code;e.status=r.status;throw e}
   return j;
 }
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
@@ -3386,18 +3389,37 @@ function mkFR(){   // filter BAM di halaman Rank (hanya administrator dengan cak
     {rows:GB.bam.map((_,i)=>[i]),COL:{bam:0},DL:{bam:GB.bam},RK:{bam:rk}});
   FR.build();FR.reset();
 }
+/* Rank memuat SATU kelompok per klik Terapkan (dulu 6 kelompok sekaligus = ~24 query berat). Hasil disimpan per cakupan, kelompok lain digabung ke objek yang sama. */
+function syncRGrp(){
+  const okB=!!(ME&&ME.can&&ME.can.rankbam),sel=$('#rGrpSel'),ob=sel.querySelector('option[value="bam"]');   // Rank BAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
+  if(ob)ob.hidden=ob.disabled=!okB;
+  if(!okB&&RGRP==='bam')RGRP='cab';
+  sel.value=RGRP;
+}
+const rkPrompt=()=>{$('#rInfo').innerHTML='';$('#rOut').innerHTML='<div class="card empty" style="margin-top:8px"><div class="e"><svg class="ic" aria-hidden="true"><use href="#i-rank"/></svg></div><div>Pilih <b>Kelompok</b> lalu klik <b>Terapkan</b>.</div></div>'};
 function rankSelect(){
   RCUR=null;$('#dlR button').disabled=true;
   if(!SCOPE)return;
+  mkFR();syncRGrp();
+  const hit=RDC.get(rkKey());
+  if(hit&&hit[RGRP]){RD=hit;renderR();return}
+  RD=null;rkPrompt();
+}
+function rankApply(){
+  if(!SCOPE)return;
   mkFR();
-  const key=rkKey(),hit=RDC.get(key);
-  if(hit){RD=hit;renderR();return}
-  RD=null;$('#rOut').innerHTML=spin();const t0=pgStart('r');
-  google.script.run.withSuccessHandler(r=>{
-    pgEnd('r',t0);prepRD(r);RDC.set(key,r);
-    if(rkKey()===key){RD=r;if(TAB==='Rank')renderR()}
-  }).withFailureHandler(e=>{pgEnd('r',t0);$('#rOut').innerHTML='<div class="card empty err">Gagal memuat data Rank:\n'+esc(e.message||e)+'</div>'})
-    .getRankCab(rkCabs(),TOKEN,false);
+  const g=$('#rGrpSel').value,key=rkKey(),hit=RDC.get(key);
+  RGRP=g;syncRGrp();
+  if(hit&&hit[g]){RD=hit;renderR();return}
+  RD=null;RCUR=null;$('#dlR button').disabled=true;$('#rInfo').innerHTML='';
+  $('#rOut').innerHTML=spin();const t0=pgStart('r'),bt=$('#rApply');bt.disabled=true;
+  gsr('getRankCab',rkCabs(),TOKEN,false,g).then(r=>{
+    pgEnd('r',t0);
+    let cur=RDC.get(key);
+    if(cur){cur[g]=r[g];cur._prepG(g)}else{prepRD(r);RDC.set(key,r);cur=r}
+    if(rkKey()===key&&RGRP===g){RD=cur;if(TAB==='Rank')renderR()}
+  }).catch(e=>{pgEnd('r',t0);if(TAB==='Rank')$('#rOut').innerHTML='<div class="card empty err">Gagal memuat data Rank:\n'+esc((e&&e.message)||e)+'</div>'})
+    .finally(()=>{bt.disabled=false});
 }
 /* per[gi] = Map(tanggal 'yyyy-MM-dd' -> [SALES_QTY, SALES_RP, BA_RP, JML_TOKO, JML_TOKO_SALES>0]); last[bulan] = tanggal terakhir yang ada penjualannya */
 const GR=['cab','pnl','bam','bas','bastr','am','as'],GL={cab:'CABANG',pnl:'CAB PNL',bam:'BAM',bas:'BAS',bastr:'BASTR',am:'AM',as:'AS'};
@@ -3406,7 +3428,7 @@ function prepRD(r){
   const add=(m,x)=>{const d=r.dates[x[1]];let o=m.get(d);if(!o)m.set(d,o=[0,0,0,0,0]);o[0]+=x[2];o[1]+=x[3];o[2]+=x[4];if(x[5]>o[3])o[3]=x[5];o[4]+=x[6]};   // o[4] = jumlah toko yang SALES_QTY-nya > 0
   const prepG=k=>{const g=r[k];if(!g||g.per)return;g.per=g.names.map(()=>new Map());g.rows.forEach(x=>add(g.per[x[0]],x))};
   r._prepG=prepG;GR.forEach(prepG);
-  r.cab.rows.forEach(x=>tot.set(r.dates[x[1]],(tot.get(r.dates[x[1]])||0)+x[2]));
+  const g0=GR.find(k=>r[k]);if(g0)r[g0].rows.forEach(x=>tot.set(r.dates[x[1]],(tot.get(r.dates[x[1]])||0)+x[2]));
   r.months=[...new Set(r.dates.map(d=>d.slice(0,7)))].sort();r.last={};
   r.months.forEach(k=>{let l=0,lq=0;r.dates.forEach(d=>{if(d.slice(0,7)!==k)return;const day=+d.slice(8);if(day>l)l=day;if((tot.get(d)||0)>0&&day>lq)lq=day});r.last[k]=lq||l});
 }
@@ -3479,12 +3501,7 @@ function loadRankBam(){
 function renderR(){
   RCUR=null;$('#dlR button').disabled=true;
   if(!RD)return;
-  {const one=rkOneCab(),pb=document.querySelector('#rGrp [data-s="pnl"]');if(pb)pb.style.display=one?'none':'';
-   if(one&&RGRP==='pnl'){RGRP='cab';document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x.dataset.s==='cab'))}}
-  {const okB=!!(ME&&ME.can&&ME.can.rankbam),bb=document.querySelector('#rGrp [data-s="bam"]');   // Rank BAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
-   if(bb)bb.style.display=okB?'':'none';
-   if(!okB&&RGRP==='bam'){RGRP='cab';document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x.dataset.s==='cab'))}}
-  if(RGRP==='bam'&&!RD.bam){loadRankBam();return}
+  syncRGrp();
   const g=RD[RGRP],gname=GL[RGRP];
   if(!g){$('#rOut').innerHTML='<div class="card empty err" style="margin-top:8px">Data Rank belum lengkap. Pastikan Code.gs versi terbaru sudah di-deploy ulang.</div>';return}
   $('#rInfo').innerHTML='<div class="info2"><span><small>CAKUPAN</small><b>'+esc(rkScope())+'</b></span><span><small>JML '+gname+'</small><b>'+nf(g.names.length)+'</b></span><span><small>PEMBANDING</small><b>'+(RCMP==='off'?'Tanpa':RCMP==='closing'?'Closing bulan lalu':'Tgl yang sama')+'</b></span></div>';
@@ -3536,12 +3553,8 @@ $('#rOut').addEventListener('click',e=>{
   inp.onblur=()=>fin(0);
   inp.onclick=ev=>ev.stopPropagation();
 });
-$('#rGrp').onclick=e=>{
-  const b=e.target.closest('button');if(!b||b.dataset.s===RGRP)return;
-  RGRP=b.dataset.s;
-  document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x===b));
-  closeAll();renderR();
-};
+$('#rApply').onclick=()=>{closeAll();rankApply()};
+$('#rGrpSel').onchange=()=>{};   // hanya memilih; data dimuat saat Terapkan
 $('#rBln').onchange=e=>{RSEL=e.target.value;renderR()};
 $('#rCmp').onchange=e=>{CMPU.r=true;RCMP=e.target.value;renderR()};
 $('#rSort').onchange=e=>{RSORT=e.target.value;renderR()};
@@ -3866,10 +3879,14 @@ function tglRawModel(raw,nm,allow){
 }
 let cabRows=[];
 async function rdEnsure(){
-  if(RD)return RD;
+  const okB=!!(ME&&ME.can&&ME.can.rankbam),need=GR.filter(k=>k!=='bam'||okB),full=r=>!!r&&need.every(k=>r[k]);
+  if(full(RD))return RD;
   const k=rkKey();let r=RDC.get(k);
-  if(!r){r=await gsr('getRankCab',rkCabs(),TOKEN,false);prepRD(r);RDC.set(k,r)}
-  if(ME&&ME.can&&ME.can.rankbam&&!r.bam){const b=await gsr('getRankCab',rkCabs(),TOKEN,false,'bam');r.bam=b.bam;r._prepG('bam')}   // sheet Rank BAM ikut Excel
+  if(!full(r)){
+    const f=await gsr('getRankCab',rkCabs(),TOKEN,false,'');   // 6 kelompok non-BAM sekaligus (hanya untuk Excel)
+    if(!r){prepRD(f);r=f;RDC.set(k,r)}else GR.forEach(g=>{if(!r[g]&&f[g]){r[g]=f[g];r._prepG(g)}})
+  }
+  if(okB&&!r.bam){const b=await gsr('getRankCab',rkCabs(),TOKEN,false,'bam');r.bam=b.bam;r._prepG('bam')}   // sheet Rank BAM ikut Excel
   return RD=r;
 }
 async function masterExcel(o){

@@ -12,6 +12,8 @@ Perbaikan (tanpa migrasi SQL; tabel `read_cache` dibuat otomatis):
 - Hasil besar (`getrows`, ~8 MB) disimpan di TiDB (`read_cache`, `readcache.js` lapis 3); pembukaan berikutnya hanya 1 query (header `X-Cache: HIT-DB`).
 - Cara lama (memindai baris) tetap ada sebagai cadangan bila SQL jalur cepat ditolak database.
 - Tes: `node --test "test/*.test.mjs"` (120 tes; 1 tes lama gagal karena `migrasi-1e.sql` tidak ikut di zip).
+- **Rank**: tab kelompok diganti dropdown **Kelompok** + tombol **Terapkan**. Satu klik hanya memuat SATU kelompok (`getRankCab(..., a[3] = 'cab'|'pnl'|'bam'|'bas'|'bastr'|'am'|'as')`, ~4 query, dulu 6 kelompok ~24 query). Kelompok lain digabung ke hasil yang sudah ada per cakupan. Master Excel tetap memuat semua (`rdEnsure`).
+- **Pesan galat 503 kini terbaca**: jawaban non-JSON dari Cloudflare ditampilkan (mis. `error code: 1102` = batas CPU/memori Worker, plus ray id), bukan sekadar "HTTP 503".
 Bila 503 masih muncul: Cloudflare -> Workers & Pages -> project -> Functions -> Real-time logs, buka halaman Stock, dan lihat pesan
 "Exceeded CPU Limit" / "Exceeded Memory" / "Too many subrequests".
 

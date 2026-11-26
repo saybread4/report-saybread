@@ -421,3 +421,21 @@ test('Stock jalur cepat: lebih dari 10.000 toko tetap lengkap (kamus dibaca per 
   assert.equal(rows.length, N);
   assert.deepEqual(rows.map((x) => x[3]).sort((x, y) => x - y), Array.from({ length: N }, (_, i) => i));   // tiap toko tepat satu indeks 0..N-1
 });
+
+// ---- Rank: satu kelompok per permintaan (tombol Terapkan) harus sama dengan hasil 6 kelompok sekaligus --------------------------
+test('getrankcab: a[3] = satu kelompok -> hanya kelompok itu, isinya sama dengan pemuatan penuh, dan jauh lebih sedikit query', async () => {
+  const db = sqliteDb((raw) => rankData(raw));
+  const fullOut = await handlers.getrankcab.run({ db, user: users.pusat }, [[]]);
+  const nFull = db.log.length;
+  for (const g of ['cab', 'pnl', 'bas', 'bastr', 'am', 'as']) {
+    db.log.length = 0;
+    const one = await handlers.getrankcab.run({ db, user: users.pusat }, [[], '', false, g]);
+    assert.deepEqual(Object.keys(one).filter((k) => ['cab', 'pnl', 'bam', 'bas', 'bastr', 'am', 'as'].includes(k)), [g]);
+    assert.deepEqual(one[g], fullOut[g]);
+    assert.deepEqual(one.dates, fullOut.dates);
+    assert.ok(db.log.length < nFull, 'satu kelompok harus memakai lebih sedikit query');
+  }
+  const bam = await handlers.getrankcab.run({ db, user: users.pusat }, [[], '', false, 'bam']);
+  assert.deepEqual(Object.keys(bam).filter((k) => k === 'bam' || k === 'cab'), ['bam']);
+  await assert.rejects(handlers.getrankcab.run({ db, user: { jabatan: 'BAS', bam_scope: ['BAM A'] } }, [[], '', false, 'bam']), /akses/);   // BAM tetap dibatasi jabatan
+});
