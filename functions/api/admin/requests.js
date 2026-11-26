@@ -1,6 +1,6 @@
 // Permintaan masuk — khusus Admin Pusat.
 //   GET  /api/admin/requests                       pendaftaran & permintaan reset yang menunggu
-//   POST {action:'approve', id, jabatan, bam_scope}  setujui pendaftaran -> akun aktif (password = pilihan pendaftar)
+//   POST {action:'approve', id, jabatan, area:{koorbam[],bam[],cabang[]} | bam_scope}  setujui pendaftaran -> akun aktif (password = pilihan pendaftar)
 //   POST {action:'reject',  id, catatan?}            tolak pendaftaran
 //   POST {action:'reset',   id}                      proses permintaan reset -> password sementara (tampil sekali)
 //   POST {action:'dismiss', id}                      abaikan permintaan reset
@@ -8,10 +8,26 @@ import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
 import { requireUser, audit, JABATAN, LABEL, normScope, isUtama, isFullRole } from '../../_lib/auth.js';
 import { hashPassword, tempPassword, iterFrom } from '../../_lib/security.js';
+import { loadHierarchySafe, hasSelection, resolveArea, packArea } from '../../_lib/area.js';
 
 async function bamList(db) {
   const r = await db.query("SELECT DISTINCT UPPER(TRIM(bam)) AS bam FROM toko WHERE bam IS NOT NULL AND TRIM(bam) <> '' ORDER BY 1");
   return r.map((x) => x.bam);
+}
+
+// area_diminta berisi JSON {k,b,c} (pendaftaran baru) atau teks bebas (pendaftaran lama).
+function parseDiminta(t) {
+  const x = String(t == null ? '' : t);
+  if (x[0] !== '{') return { text: x, sel: null };
+  try {
+    const o = JSON.parse(x), a = (v) => (Array.isArray(v) ? v.map(String) : []);
+    const sel = { k: a(o.k), b: a(o.b), c: a(o.c) };
+    const p = [];
+    if (sel.k.length) p.push('KOORBAM: ' + sel.k.join(', '));
+    if (sel.b.length) p.push('BAM: ' + sel.b.join(', '));
+    if (sel.c.length) p.push('CABANG: ' + sel.c.join(', '));
+    return { text: p.join(' · '), sel };
+  } catch (e) { return { text: x, sel: null }; }
 }
 
 export async function handleGet({ request }, db) {
@@ -21,11 +37,12 @@ export async function handleGet({ request }, db) {
   const rst = await db.query(
     "SELECT r.id, r.nik, r.kontak, r.created_at, u.nama, u.jabatan FROM reset_requests r LEFT JOIN users u ON u.nik = r.nik WHERE r.status = 'PENDING' ORDER BY r.id");
   return json({
-    registrations: regs.map((r) => ({ id: Number(r.id), nik: r.nik, nama: r.nama, jabatan_diminta: r.jabatan_diminta,
-      label_diminta: LABEL[r.jabatan_diminta] || r.jabatan_diminta, area_diminta: r.area_diminta, kontak: r.kontak || '', created_at: r.created_at || null })),
+    registrations: regs.map((r) => { const d = parseDiminta(r.area_diminta); return ({ id: Number(r.id), nik: r.nik, nama: r.nama, jabatan_diminta: r.jabatan_diminta,
+      label_diminta: LABEL[r.jabatan_diminta] || r.jabatan_diminta, area_diminta: d.text, area_sel: d.sel, kontak: r.kontak || '', created_at: r.created_at || null }); }),
     resets: rst.filter((r) => isUtama(me) || r.jabatan !== 'ADMIN_PUSAT').map(   // permintaan reset milik Admin Utama tidak terlihat oleh Administrator
       (r) => ({ id: Number(r.id), nik: r.nik, nama: r.nama || '', label: LABEL[r.jabatan] || '', kontak: r.kontak || '', created_at: r.created_at || null })),
     bamList: await bamList(db),
+    hier: (await loadHierarchySafe(db)).map((r) => [r.k, r.b, r.c]),
     jabatan: JABATAN.filter((k) => isUtama(me) || k !== 'ADMIN_PUSAT').map((k) => ({ key: k, label: LABEL[k] })),
   });
 }
@@ -55,8 +72,11 @@ export async function handlePost({ request, env }, db) {
     if (b.jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw new HttpError(403, 'Tidak diizinkan.', 'FORBIDDEN');
     let scope = null;
     if (!isFullRole(b.jabatan)) {
-      scope = normScope(b.bam_scope);
-      if (!scope.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');
+      if (hasSelection(b.area)) scope = packArea(await resolveArea(db, b.area));   // pilihan KOORBAM / BAM / CABANG
+      else {
+        scope = normScope(b.bam_scope);
+        if (!scope.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');
+      }
     }
     if ((await db.query('SELECT 1 FROM users WHERE nik = ? LIMIT 1', [reg.nik])).length)
       throw new HttpError(409, 'NIK itu sudah ada di daftar pengguna.', 'EXISTS');
@@ -66,7 +86,7 @@ export async function handlePost({ request, env }, db) {
     await db.exec("UPDATE registrations SET status = 'APPROVED', diproses_oleh = ?, diproses_at = UTC_TIMESTAMP() WHERE id = ?", [me.nik, id]);
     await audit(db, { nik: me.nik, aksi: 'setuju_daftar', target: reg.nik, detail: b.jabatan });
     const known = new Set(await bamList(db));
-    return json({ ok: true, nik: reg.nik, unknownBam: (scope || []).filter((x) => !known.has(x)) });
+    return json({ ok: true, nik: reg.nik, unknownBam: (Array.isArray(scope) ? scope : []).filter((x) => !known.has(x)) });
   }
 
   if (b.action === 'reset' || b.action === 'dismiss') {

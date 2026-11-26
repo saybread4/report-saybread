@@ -328,7 +328,8 @@ CREATE TABLE telegram_state (
 --  4. LOGIN PER PENGGUNA (BARU) — pengganti admin_bam, admin_lihat, admin_session, admin_config
 --     Password TIDAK disimpan polos. Hash dibuat di API (PBKDF2-SHA256 + salt per pengguna).
 --     jabatan : ADMIN_PUSAT | ADMIN_KOORBAM | KOORBAM | BAM | BAS | BASTR
---     bam_scope: daftar BAM yang menjadi area pengguna, mis. ["BAM A","BAM B"].
+--     bam_scope: area pengguna. Format lama: ["BAM A","BAM B"]. Format baru (pilihan KOORBAM/BAM/CABANG, tanpa ubah skema):
+--                {"bam":[...],"cabang":[...],"sel":{"k":[],"b":[],"c":[]}}  (cabang kosong = seluruh cabang pada BAM itu). Lihat functions/_lib/area.js.
 --                ADMIN_PUSAT diisi NULL (semua area). Jabatan lain wajib berisi minimal satu BAM;
 --                kosong berarti tidak ada data yang terlihat. Hak akses dijaga di API, bukan di sini.
 -- ----------------------------------------------------------------------------
@@ -381,7 +382,7 @@ CREATE TABLE IF NOT EXISTS registrations (
   nik             VARCHAR(30)  NOT NULL,
   nama            VARCHAR(150) NOT NULL,
   jabatan_diminta VARCHAR(50)  NOT NULL,
-  area_diminta    VARCHAR(200) NOT NULL,          -- teks bebas dari pendaftar (mis. nama BAM)
+  area_diminta    VARCHAR(200) NOT NULL,          -- JSON pilihan {k,b,c} (KOORBAM/BAM/CABANG) atau teks bebas (lama); dilebarkan otomatis ke VARCHAR(2000) saat ada pendaftaran
   kontak          VARCHAR(60),                    -- WA/HP, opsional, agar admin bisa menghubungi
   pw_hash         VARCHAR(128) NOT NULL,          -- password pilihan pendaftar (di-hash); dipakai saat disetujui
   pw_salt         VARCHAR(64)  NOT NULL,

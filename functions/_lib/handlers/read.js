@@ -353,7 +353,8 @@ export const readHandlers = {
       const empty = { tgl: null, awal: null, akhir: null, items: [], stores: [], cells: [] };
       if (!isPusat(user) && !(user.bam_scope || []).map(norm).includes(bamN)) return empty;
       const toko = await queryAll(db, 'SELECT kode, toko, cabang, cab_pnl, bam FROM toko', [], 'kode, toko');
-      const t = toko.filter((r) => norm(r.bam) === bamN)
+      const cs = (user.cabang_scope || []).map(norm);   // pengguna dibatasi ke cabang tertentu
+      const t = toko.filter((r) => norm(r.bam) === bamN && (isPusat(user) || !cs.length || cs.includes(norm(r.cabang))))
         .map((r) => ({ kode: r.kode, toko: nz(r.toko), cabang: nz(r.cabang), pnl: nz(r.cab_pnl) }));
       const mx = (await db.query('SELECT MAX(tanggal) AS d FROM stock'))[0];
       const tgl = mx && mx.d ? ymd(mx.d) : '';

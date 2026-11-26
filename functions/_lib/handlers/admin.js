@@ -240,6 +240,9 @@ async function adminUpdate(db, user, a) {
     const sc = user.bam_scope || [];
     if (SCOPE_BAM.has(t) && 'bam' in ch && !sc.includes(String(ch.bam == null ? '' : ch.bam).trim().toUpperCase()))
       throw bad(`BAM harus ${sc.join('/')} untuk akun Anda.`);
+    const cs = user.cabang_scope || [];
+    if (SCOPE_BAM.has(t) && cs.length && 'cabang' in ch && !cs.includes(String(ch.cabang == null ? '' : ch.cabang).trim().toUpperCase()))
+      throw bad(`Cabang harus ${cs.join('/')} untuk akun Anda.`);
     if (!SCOPE_BAM.has(t) && 'kode' in ch) {
       const w = bamWhere(user, 'bam');
       const r = await db.query(`SELECT 1 AS x FROM toko WHERE UPPER(TRIM(kode)) = ? AND ${w.sql} LIMIT 1`,
@@ -293,10 +296,15 @@ async function checkImportScope(db, user, t, rows) {
   if (SCOPE_BAM.has(t)) {
     const salah = [...new Set(rows.filter((r) => !sc.includes(up(r.bam))).map((r) => up(r.bam) || '(kosong)'))];
     if (salah.length) throw bad(`Kolom BAM harus ${sc.join('/')} untuk akun Anda (ditemukan: ${salah.slice(0, 5).join(', ')}).`);
+    const cs = user.cabang_scope || [];
+    if (cs.length) {
+      const bc = [...new Set(rows.filter((r) => !cs.includes(up(r.cabang))).map((r) => up(r.cabang) || '(kosong)'))];
+      if (bc.length) throw bad(`Kolom CABANG harus ${cs.join('/')} untuk akun Anda (ditemukan: ${bc.slice(0, 5).join(', ')}).`);
+    }
     if (t === 'toko') {
       for (const part of chunks([...new Set(rows.map((r) => up(r.kode)))], 1000)) {
-        const ex = await db.query(`SELECT UPPER(TRIM(bam)) AS b FROM toko WHERE UPPER(TRIM(kode)) IN (${ph(part.length)})`, part);
-        if (ex.some((x) => !sc.includes(String(x.b == null ? '' : x.b)))) throw bad('Ada kode toko yang sudah dipakai BAM lain.');
+        const ex = await db.query(`SELECT UPPER(TRIM(bam)) AS b, UPPER(TRIM(cabang)) AS c FROM toko WHERE UPPER(TRIM(kode)) IN (${ph(part.length)})`, part);
+        if (ex.some((x) => !sc.includes(String(x.b == null ? '' : x.b)) || (cs.length && !cs.includes(String(x.c == null ? '' : x.c))))) throw bad('Ada kode toko yang sudah dipakai BAM lain' + (cs.length ? ' / di luar cabang Anda' : '') + '.');
       }
     }
     return;

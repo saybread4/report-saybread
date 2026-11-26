@@ -1,6 +1,7 @@
 // Sesi, jabatan, hak akses.
 import { HttpError, getCookie, SESSION_COOKIE } from './http.js';
 import { randomHex, sha256Hex } from './security.js';
+import { readArea } from './area.js';
 
 export const SESSION_HOURS = 12;          // sesi biasa (cookie berakhir saat browser ditutup)
 export const REMEMBER_HOURS = 24 * 30;    // "Ingat saya": 30 hari
@@ -50,14 +51,9 @@ export const normNik = (s) => {
 export const normScope = (a) =>
   [...new Set((Array.isArray(a) ? a : []).map((x) => String(x).trim().toUpperCase()).filter(Boolean))];
 
-// Kolom JSON dari driver bisa berupa string atau sudah berupa array.
+// Kolom JSON dari driver bisa berupa string atau sudah berupa array/objek. Hasil: daftar BAM (format lama dan baru sama-sama dibaca).
 export function parseScope(v) {
-  if (v == null) return [];
-  let a = v;
-  if (typeof v === 'string') {
-    try { a = JSON.parse(v); } catch { return []; }
-  }
-  return normScope(a);
+  return readArea(v).bam;
 }
 
 export function publicUser(u) {
@@ -68,6 +64,8 @@ export function publicUser(u) {
     jabatan: u.jabatan,
     label: LABEL[u.jabatan] || u.jabatan,
     bam_scope: pusat ? null : parseScope(u.bam_scope),   // null = semua BAM
+    cabang_scope: pusat ? null : readArea(u.bam_scope).cabang,   // [] = seluruh cabang pada BAM tsb
+    area_sel: pusat ? null : readArea(u.bam_scope).sel,
     must_change: Number(u.must_change) === 1,
     can: { edit: can(u, 'edit'), users: can(u, 'pusat'), all: pusat, rank: isUtama(u), rankbam: canRankBam(u) },
   };
@@ -96,6 +94,7 @@ export async function getSessionUser(db, request) {
   return {
     nik: r.nik, nama: r.nama, jabatan: r.jabatan,
     bam_scope: parseScope(r.bam_scope),
+    cabang_scope: readArea(r.bam_scope).cabang,
     must_change: Number(r.must_change) === 1,
     tokenHash: th,
   };

@@ -83,6 +83,21 @@ main{padding:10px 12px 24px}
 .opt{display:flex;gap:7px;padding:4px;border-radius:7px;cursor:pointer;align-items:flex-start}
 .opt:hover{background:var(--soft)}
 .opt input{accent-color:var(--pr)}
+/* pemilih area KOORBAM / BAM / CABANG (daftar akun, kelola pengguna): panel mengembang di tempat (bukan melayang) agar tidak terpotong kartu/modal */
+.ap{display:grid;gap:10px}
+.ap.row{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+.ap.gate{gap:14px;margin-bottom:6px}
+.ap .apf{min-width:0}
+.ap .apf>label{display:block;font-size:11px;font-weight:700;color:var(--mu);margin:0 0 3px;letter-spacing:.04em}
+.ap.gate .apf>label{font-size:12px;font-weight:600;color:var(--tx);letter-spacing:0;margin-bottom:5px}
+.ap.gate .dd-btn{padding:12px 14px;border-radius:12px;background:#f6f8f8;font-size:14px}
+.ap .apf.open .dd-btn{border-color:var(--pr);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+.ap .ap-panel{display:none;margin-top:4px;border:1px solid var(--bd);border-radius:12px;padding:8px;background:#fff}
+.ap .apf.open .ap-panel{display:block}
+.ap .dd-list{max-height:190px}
+.ap .opt input{padding:0!important;border:0!important;width:auto!important;margin:2px 0 0;flex:none}
+.ap .ap-sum{grid-column:1/-1;font-size:11.5px;color:var(--mu);min-height:14px}
+@media(max-width:620px){.ap.row{grid-template-columns:1fr}}
 .note{font-size:11.5px;color:var(--mu);padding:4px}
 
 /* ikon SVG garis (pengganti emoji) */
@@ -664,7 +679,8 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
           <div class="gf"><label for="rgNik">NIK</label><input id="rgNik" autocomplete="username" autocapitalize="characters" spellcheck="false"></div>
           <div class="gf"><label for="rgNama">Nama lengkap</label><input id="rgNama" autocomplete="name"></div>
           <div class="gf"><label for="rgJab">Jabatan</label><select id="rgJab"><option value="">Pilih jabatan…</option><option value="KOORBAM">Koorbam</option><option value="BAM">BAM</option><option value="BAS">BAS</option><option value="BASTR">BASTR</option></select></div>
-          <div class="gf"><label for="rgArea">Area BAM</label><input id="rgArea" placeholder="Mis. BAM Surabaya" autocomplete="off"></div>
+          <div class="ap gate" id="rgAp"></div>
+          <div class="ghint" id="rgApHint">Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.</div>
           <div class="gf"><label for="rgKontak">No. WhatsApp <span class="gopt">(opsional)</span></label><input id="rgKontak" inputmode="tel" autocomplete="tel" placeholder="Agar admin bisa menghubungi Anda"></div>
           <div class="gf pw"><label for="rgPw">Password</label><input id="rgPw" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="rgPw" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
           <div class="gf pw"><label for="rgPw2">Ulangi password</label><input id="rgPw2" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="rgPw2" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
@@ -958,6 +974,13 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
   <div style="display:flex;gap:6px;flex-wrap:nowrap;padding:8px 12px;border-bottom:1px solid #e3e6ea"><input type="date" id="gmD" style="flex:1;min-width:0"><button class="b p" id="gmAdd" type="button">+ Tambah</button></div>
   <div style="overflow:auto;padding:0 12px 10px"><table><thead><tr><th>Tanggal</th><th style="width:56px">Aksi</th></tr></thead><tbody id="gmL"></tbody></table></div>
  </div></div>
+<div id="arW" style="display:none;position:fixed;inset:0;z-index:260;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">
+ <div style="background:#fff;color:#1f2937;border-radius:16px;width:640px;max-width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.35)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e3e6ea"><b style="font-size:13px" id="arT">Area</b><button class="b s" id="arX" type="button"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div style="padding:12px"><div id="arAp"></div>
+   <div class="amn" style="padding:8px 0 0">Pilihan saling terhubung. Dikosongkan di tingkat bawah = semua di tingkat atasnya. Perubahan berlaku saat pengguna masuk lagi.</div>
+   <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px"><button class="b s" id="arNo" type="button">Batal</button><button class="b p" id="arOk" type="button">Simpan area</button></div></div>
+ </div></div>
 <div id="usW" style="display:none;position:fixed;inset:0;z-index:250;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">
  <div style="background:#fff;color:#1f2937;border-radius:16px;width:820px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.35)">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e3e6ea"><b style="font-size:13px">Kelola Pengguna</b><button class="b s" id="usX" type="button"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -968,16 +991,16 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <button type="button" id="usTabX" role="tab">Reset password<span id="tabRstN"></span></button>
   </div>
   <div id="usPaneU" style="display:flex;flex-direction:column;min-height:0">
-   <div class="amn">Setiap pengguna masuk dengan <b>NIK</b>. Area = daftar BAM yang boleh dilihat. <b>Admin Utama</b> dan <b>Administrator</b> melihat semua BAM. Password sementara hanya tampil <b>sekali</b>; pengguna wajib menggantinya saat masuk pertama.</div>
+   <div class="amn">Setiap pengguna masuk dengan <b>NIK</b>. Area = KOORBAM / BAM / CABANG yang boleh dilihat. <b>Admin Utama</b> dan <b>Administrator</b> melihat semua BAM. Password sementara hanya tampil <b>sekali</b>; pengguna wajib menggantinya saat masuk pertama.</div>
    <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid #e3e6ea">
     <input id="usNik" placeholder="NIK" style="width:120px" autocomplete="off">
     <input id="usNama" placeholder="Nama" style="flex:1;min-width:140px" autocomplete="off">
     <select id="usJab"></select>
-    <input id="usBam" placeholder="BAM (pisahkan koma)" style="flex:1;min-width:150px" autocomplete="off">
     <button class="b p" id="usAdd" type="button">+ Tambah</button>
    </div>
-   <div id="usHint" class="amn" style="padding-top:0"></div>
-   <div style="overflow:auto;padding:0 12px 12px"><table><thead><tr><th>NIK</th><th>Nama</th><th>Jabatan</th><th>Area (BAM)</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="usL"><tr><td colspan="6">Memuat…</td></tr></tbody></table></div>
+   <div id="usApW" style="padding:8px 12px 0"><div id="usAp"></div></div>
+   <div id="usHint" class="amn" style="padding-top:2px">Area: pilih KOORBAM / BAM / CABANG (boleh lebih dari satu, saling terhubung). Dikosongkan di tingkat bawah = semua di tingkat atasnya. Admin Utama dan Administrator melihat semuanya.</div>
+   <div style="overflow:auto;padding:0 12px 12px"><table><thead><tr><th>NIK</th><th>Nama</th><th>Jabatan</th><th>Area</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="usL"><tr><td colspan="6">Memuat…</td></tr></tbody></table></div>
   </div>
   <div id="usPaneR" style="display:none;flex-direction:column;min-height:0">
    <div class="amn">Orang yang mendaftar sendiri. <b>Jabatan dan area yang mereka isi hanya permintaan</b> — periksa, perbaiki bila perlu, lalu setujui. Setelah disetujui mereka masuk dengan password yang mereka buat sendiri.</div>
@@ -1065,7 +1088,15 @@ function showPw(old,msg){
   $('#pwOld').value=old||'';$('#pwNew').value='';$('#pwNew2').value='';$('#pwMsg').textContent=msg||'';
   focusSoon(old?'#pwNew':'#pwOld');
 }
-function showReg(){gView('reg');$('#rgMsg').textContent='';focusSoon('#rgNik')}
+let RGP=null;
+async function showReg(){
+  gView('reg');$('#rgMsg').textContent='';focusSoon('#rgNik');
+  if(!RGP)RGP=areaPicker($('#rgAp'));
+  try{
+    RGP.setHier(await apLoad());
+    $('#rgApHint').textContent=APH.length?'Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.':'Daftar area belum tersedia (data toko belum ada). Hubungi admin.';
+  }catch(e){$('#rgApHint').textContent='Gagal memuat daftar area: '+((e&&e.message)||e)+' — tutup lalu buka lagi halaman daftar.'}
+}
 function showRst(){gView('rst');$('#rsMsg').textContent='';$('#rsNik').value=$('#nikNik').value.trim();focusSoon($('#rsNik').value?'#rsKontak':'#rsNik')}
 function gDone(t,p){$('#doneT').textContent=t;$('#doneP').textContent=p;gView('done')}
 function authNeeded(code){
@@ -1121,12 +1152,15 @@ async function doChangePw(){
 }
 async function doRegister(){
   const v=id=>$('#'+id).value.trim(),msg=t=>{$('#rgMsg').textContent=t};
-  const nik=v('rgNik'),nama=v('rgNama'),jab=$('#rgJab').value,area=v('rgArea'),kontak=v('rgKontak'),pw=$('#rgPw').value,pw2=$('#rgPw2').value;
-  if(!nik||!nama||!jab||!area||!pw){msg('Lengkapi NIK, nama, jabatan, area BAM, dan password.');return}
+  const nik=v('rgNik'),nama=v('rgNama'),jab=$('#rgJab').value,kontak=v('rgKontak'),pw=$('#rgPw').value,pw2=$('#rgPw2').value;
+  const area=RGP?RGP.get():null;
+  if(!nik||!nama||!jab||!pw){msg('Lengkapi NIK, nama, jabatan, dan password.');return}
+  if(!RGP||!RGP.any()){msg('Pilih area Anda: minimal satu KOORBAM, BAM, atau CABANG.');return}
   if(pw!==pw2){msg('Ulangi password dengan benar.');return}
   $('#rgGo').disabled=true;msg('');
   try{
     await api('/api/auth/register',{nik,nama,jabatan:jab,area,kontak,password:pw});
+    RGP.clear();
     $('#rgPw').value='';$('#rgPw2').value='';
     gDone('Pendaftaran terkirim','Admin akan memeriksa jabatan dan area Anda. Setelah disetujui, Anda bisa masuk dengan NIK dan password yang baru Anda buat.');
   }catch(e){msg(e.message||'Gagal mengirim pendaftaran')}
@@ -1179,7 +1213,7 @@ function umRender(u){
   $('#uAv').textContent=(String(nm).trim()[0]||'?').toUpperCase();
   $('#uNm').textContent=nm;$('#uRl').textContent=u.label;
   $('#uPn').textContent=nm;$('#uPm').textContent='NIK '+u.nik+' · '+u.label;
-  $('#uPa').textContent='Area: '+(u.bam_scope===null?'Semua BAM':((u.bam_scope||[]).join(', ')||'belum ditentukan'));
+  $('#uPa').textContent='Area: '+(u.bam_scope===null?'Semua BAM':((u.bam_scope||[]).join(', ')||'belum ditentukan')+((u.cabang_scope||[]).length?' · Cabang: '+u.cabang_scope.join(', '):''));
   document.querySelector('.umenu').style.display='';
 }
 function umOpen(on){
@@ -1208,8 +1242,65 @@ function setPending(p){
 }
 async function refreshPending(){try{const j=await api('/api/auth/me');setPending(j.pending)}catch(e){}}
 
+/* ================= PEMILIH AREA: KOORBAM / BAM / CABANG =================
+   Tiga dropdown multi-pilih yang saling terhubung: daftar pilihan tiap dropdown mengikuti pilihan dua dropdown lainnya,
+   dan pilihan yang tidak cocok lagi dibuang otomatis. Data = [[koorbam, bam, cabang], ...] dari tabel toko (server).
+   Dipakai di form Daftar, Kelola Pengguna (tambah & ubah area), dan persetujuan pendaftaran. Server menghitung ulang area dari pilihan ini. */
+const apU=v=>String(v==null?'':v).trim().toUpperCase();
+document.addEventListener('click',e=>document.querySelectorAll('.ap .apf.open').forEach(f=>{if(!f.contains(e.target))f.classList.remove('open')}));
+function areaPicker(root,o){
+  const KEYS=[['k','KOORBAM',0],['b','BAM',1],['c','CABANG',2]];
+  let H=[];const S={k:new Map(),b:new Map(),c:new Map()},OPT={k:new Map(),b:new Map(),c:new Map()};
+  const rowsFor=skip=>H.filter(r=>KEYS.every(([k,,i])=>k===skip||!S[k].size||S[k].has(apU(r[i]))));
+  const cascade=()=>{for(let pass=0;pass<2;pass++)for(const [k,,i] of KEYS){
+    const m=new Map();for(const r of rowsFor(k)){const v=String(r[i]||'').trim();if(v&&!m.has(apU(v)))m.set(apU(v),v)}
+    OPT[k]=m;for(const u of [...S[k].keys()])if(!m.has(u))S[k].delete(u)}};
+  const any=()=>KEYS.some(([k])=>S[k].size>0);
+  const fld=k=>root.querySelector('.apf[data-k='+k+']');
+  const render=k=>{
+    const f=fld(k),q=f.querySelector('.dd-search').value.trim().toLowerCase();
+    const v=[...OPT[k].entries()].filter(([u,l])=>!q||l.toLowerCase().includes(q)).sort((a,b)=>CO(a[1],b[1]));f._v=v;
+    f.querySelector('.dd-list').innerHTML=v.slice(0,300).map(([u,l],i)=>`<label class="opt"><input type="checkbox" data-i="${i}"${S[k].has(u)?' checked':''}><span>${esc(l)}</span></label>`).join('')
+      +(v.length>300?`<div class="note">+${v.length-300} lainnya — ketik untuk mencari</div>`:'')+(v.length?'':'<div class="note">Tidak ada pilihan</div>');
+  };
+  const refresh=()=>{
+    KEYS.forEach(([k])=>{const f=fld(k),n=S[k].size;
+      f.querySelector('.dd-btn span').textContent=n===0?'Pilih…':n===1?[...S[k].values()][0]:n+' dipilih';
+      if(f.classList.contains('open'))render(k)});
+    const el=root.querySelector('.ap-sum');
+    if(!any()){el.textContent='';return}
+    const rs=rowsFor(null);el.textContent='Mencakup '+new Set(rs.map(r=>apU(r[1]))).size+' BAM · '+new Set(rs.map(r=>apU(r[1])+'\u0001'+apU(r[2]))).size+' cabang';
+  };
+  root.classList.add('ap');
+  root.innerHTML=KEYS.map(([k,l])=>`<div class="apf" data-k="${k}"><label>${l}</label><button type="button" class="dd-btn"><span>Pilih…</span><i>▾</i></button><div class="ap-panel"><input class="dd-search" placeholder="Cari…" autocomplete="off"><div class="dd-act"><a data-a="all">Pilih semua hasil</a><a data-a="none">Kosongkan</a></div><div class="dd-list"></div></div></div>`).join('')+'<div class="ap-sum"></div>';
+  root.addEventListener('click',e=>{
+    const f=e.target.closest('.apf');if(!f)return;const k=f.dataset.k;
+    if(e.target.closest('.dd-btn')){const open=f.classList.contains('open');root.querySelectorAll('.apf.open').forEach(x=>x.classList.remove('open'));if(!open){f.classList.add('open');f.querySelector('.dd-search').value='';render(k);f.querySelector('.dd-search').focus()}return}
+    const a=e.target.closest('a[data-a]');
+    if(a){if(a.dataset.a==='none')S[k].clear();else(f._v||[]).forEach(([u,l])=>S[k].set(u,l));cascade();refresh()}
+  });
+  let sT;root.addEventListener('input',e=>{if(!e.target.classList.contains('dd-search'))return;const k=e.target.closest('.apf').dataset.k;clearTimeout(sT);sT=setTimeout(()=>render(k),90)});
+  root.addEventListener('change',e=>{
+    const f=e.target.closest('.apf');if(!f||e.target.type!=='checkbox')return;
+    const k=f.dataset.k,it=(f._v||[])[+e.target.dataset.i];if(!it)return;
+    e.target.checked?S[k].set(it[0],it[1]):S[k].delete(it[0]);cascade();refresh();
+  });
+  return{
+    setHier(h){H=(h||[]).map(r=>[r[0]||'',r[1]||'',r[2]||'']);cascade();refresh()},
+    set(sel){   // sel = {k:[],b:[],c:[]} (nama); nama yang tidak ada di data toko dibuang
+      sel=sel||{};
+      const lab=KEYS.map(([,,i])=>{const m=new Map();H.forEach(r=>{const v=String(r[i]||'').trim();if(v&&!m.has(apU(v)))m.set(apU(v),v)});return m});
+      KEYS.forEach(([k,,i])=>{S[k].clear();(sel[k]||[]).forEach(n=>{const u=apU(n);if(u)S[k].set(u,lab[i].get(u)||String(n).trim())})});
+      cascade();refresh()},
+    get(){return{koorbam:[...S.k.values()],bam:[...S.b.values()],cabang:[...S.c.values()]}},
+    any,clear(){KEYS.forEach(([k])=>S[k].clear());cascade();refresh()},
+  };
+}
+let APH=null;   // daftar [koorbam, bam, cabang] untuk form Daftar (tanpa login)
+async function apLoad(){if(APH)return APH;const j=await api('/api/auth/area-options');APH=(j&&j.h)||[];return APH}
+
 /* ================= KELOLA PENGGUNA (Admin Utama / Administrator) ================= */
-let US=null;
+let US=null,USP=null,ARP=null,ARU=null,RQP=new Map();
 const FULLJ=['ADMIN_PUSAT','ADMINISTRATOR'];   // jabatan dengan akses semua BAM (tanpa area)
 const usBam=t=>[...new Set(String(t||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean))];
 function usTmp(msg){const e=$('#usTmp');e.style.display=msg?'':'none';e.innerHTML=msg||''}
@@ -1217,13 +1308,16 @@ async function usLoad(){
   try{
     US=await api('/api/admin/users');
     $('#usJab').innerHTML=US.jabatan.map(j=>`<option value="${esc(j.key)}">${esc(j.label)}</option>`).join('');
-    $('#usHint').textContent='BAM yang ada di data toko: '+(US.bamList.join(', ')||'(belum ada, impor tabel toko dulu)');
+    if(!USP){USP=areaPicker($('#usAp'));$('#usAp').classList.add('row');$('#usJab').onchange=usJabUI}
+    USP.setHier(US.hier||[]);usJabUI();
+    if(!(US.hier||[]).length)$('#usHint').textContent='Data toko belum ada (impor tabel toko dulu), jadi pilihan KOORBAM / BAM / CABANG masih kosong.';
     usDraw();
   }catch(e){$('#usL').innerHTML='<tr><td colspan="6" style="color:#b4361f">'+esc(e.message||e)+'</td></tr>'}
 }
+const usJabUI=()=>{$('#usApW').style.display=FULLJ.includes($('#usJab').value)?'none':''};
 function usDraw(){
   $('#usL').innerHTML=US.users.map(u=>`<tr><td>${esc(u.nik)}</td><td>${esc(u.nama)}</td><td>${esc(u.label)}</td>
-    <td>${u.bam_scope===null?'<i>semua</i>':esc((u.bam_scope||[]).join(', ')||'-')}</td>
+    <td style="white-space:normal;max-width:300px">${u.bam_scope===null?'<i>semua</i>':esc(u.area_text||(u.bam_scope||[]).join(', ')||'-')}</td>
     <td class="${u.aktif?'on':'off'}">${u.aktif?'Aktif':'Nonaktif'}${u.must_change?' · belum ganti pw':''}</td>
     <td>${u.jabatan==='ADMIN_PUSAT'&&!(ME&&ME.can&&ME.can.rank)?'':`<button class="b s" data-a="area" data-n="${esc(u.nik)}">Area</button><button class="b s" data-a="aktif" data-n="${esc(u.nik)}">${u.aktif?'Nonaktifkan':'Aktifkan'}</button><button class="b s" data-a="reset" data-n="${esc(u.nik)}">Reset PW</button>`}</td></tr>`).join('')||'<tr><td colspan="6">Belum ada pengguna.</td></tr>';
 }
@@ -1241,8 +1335,7 @@ $('#usL').onclick=async e=>{
     else if(b.dataset.a==='reset'){if(confirm('Reset password '+u.nik+'?'))await usPost({action:'reset',nik:u.nik})}
     else if(b.dataset.a==='area'){
       if(u.bam_scope===null){toast('Jabatan ini selalu melihat semua BAM');return}
-      const v=prompt('BAM untuk '+u.nik+' (pisahkan dengan koma):',(u.bam_scope||[]).join(', '));
-      if(v!==null)await usPost({action:'update',nik:u.nik,bam_scope:usBam(v)});
+      arOpen(u);
     }
   }catch(err){toast(err.message||'Gagal',4000)}
 };
@@ -1250,11 +1343,29 @@ $('#usAdd').onclick=async()=>{
   const nik=$('#usNik').value.trim(),nama=$('#usNama').value.trim(),jab=$('#usJab').value;
   if(!nik||!nama){toast('Isi NIK dan nama');return}
   try{
-    await usPost({action:'create',nik,nama,jabatan:jab,bam_scope:FULLJ.includes(jab)?undefined:usBam($('#usBam').value)});
-    $('#usNik').value='';$('#usNama').value='';$('#usBam').value='';
+    if(!FULLJ.includes(jab)&&!USP.any()){toast('Pilih area: minimal satu KOORBAM, BAM, atau CABANG');return}
+    await usPost({action:'create',nik,nama,jabatan:jab,area:FULLJ.includes(jab)?undefined:USP.get()});
+    $('#usNik').value='';$('#usNama').value='';USP.clear();
   }catch(err){toast(err.message||'Gagal',4000)}
 };
 $('#usX').onclick=()=>{$('#usW').style.display='none';usTmp('')};
+/* dialog ubah area satu pengguna */
+function arOpen(u){
+  ARU=u;$('#arT').textContent='Area · '+u.nama+' ('+u.nik+')';
+  if(!ARP){ARP=areaPicker($('#arAp'));$('#arAp').classList.add('row')}
+  ARP.setHier(US.hier||[]);
+  const s=u.area_sel||{k:[],b:[],c:[]};
+  ARP.set(s.k.length||s.b.length||s.c.length?s:{k:[],b:u.bam_scope||[],c:[]});   // akun lama: hanya daftar BAM
+  $('#arW').style.display='flex';
+}
+const arClose=()=>{$('#arW').style.display='none';ARU=null};
+$('#arX').onclick=arClose;$('#arNo').onclick=arClose;
+$('#arOk').onclick=async()=>{
+  if(!ARU)return;if(!ARP.any()){toast('Pilih minimal satu KOORBAM, BAM, atau CABANG');return}
+  const b=$('#arOk');b.disabled=true;
+  try{await usPost({action:'update',nik:ARU.nik,area:ARP.get()});toast('Area disimpan',2500);arClose()}
+  catch(err){toast(err.message||'Gagal',4000)}finally{b.disabled=false}
+};
 /* --- tab: Pengguna | Pendaftaran | Reset password --- */
 let RQ=null;
 function usTab(t){
@@ -1272,15 +1383,21 @@ async function rqLoad(){
 }
 function rqDraw(){
   $('#rgL').innerHTML=RQ.registrations.map(r=>{
-    const g=guessBam(r.area_diminta,RQ.bamList);
     return `<div class="rqc" data-id="${r.id}">
       <div class="rqh"><b>${esc(r.nama)}</b><span>NIK ${esc(r.nik)}</span><span class="rqd">${esc(rqDate(r.created_at))}</span></div>
-      <div class="rqm">Mengaku <b>${esc(r.label_diminta)}</b> · area yang ditulis: <b>${esc(r.area_diminta)}</b>${r.kontak?' · WA '+esc(r.kontak):''}</div>
+      <div class="rqm">Mengaku <b>${esc(r.label_diminta)}</b> · area yang dipilih: <b>${esc(r.area_diminta)}</b>${r.kontak?' · WA '+esc(r.kontak):''}</div>
+      <div class="rqap" style="margin:0 0 8px"></div>
       <div class="rqa">
         <label>Jabatan yang benar<select class="rqj">${RQ.jabatan.map(j=>`<option value="${esc(j.key)}"${j.key===r.jabatan_diminta?' selected':''}>${esc(j.label)}</option>`).join('')}</select></label>
-        <label class="rqb">Area BAM (pisahkan koma)<input class="rqb" value="${esc(g.join(', '))}" placeholder="${esc(RQ.bamList.join(', ')||'belum ada data toko')}"></label>
         <span class="rqx"><button class="b p" data-a="approve" type="button">Setujui</button><button class="b s" data-a="reject" type="button">Tolak</button></span>
       </div></div>`}).join('')||'<div class="rqe">Tidak ada pendaftaran yang menunggu.</div>';
+  RQP=new Map();   // pemilih area per kartu; diisi dari pilihan pendaftar (akun lama: tebakan dari teks area)
+  const bams=[...new Set((RQ.hier||[]).map(h=>h[1]))];
+  RQ.registrations.forEach(r=>{
+    const el=$('#rgL').querySelector('.rqc[data-id="'+r.id+'"] .rqap');if(!el)return;
+    const p=areaPicker(el);el.classList.add('row');p.setHier(RQ.hier||[]);
+    p.set(r.area_sel||{k:[],b:guessBam(r.area_diminta,bams),c:[]});RQP.set(r.id,p);
+  });
   $('#rsL').innerHTML=RQ.resets.map(r=>`<div class="rqc" data-id="${r.id}">
       <div class="rqh"><b>${esc(r.nama||'(NIK tidak dikenal)')}</b><span>NIK ${esc(r.nik)}${r.label?' · '+esc(r.label):''}</span><span class="rqd">${esc(rqDate(r.created_at))}</span></div>
       <div class="rqm">${r.kontak?'Hubungi: <b>'+esc(r.kontak)+'</b>':'Tidak mencantumkan kontak.'}</div>
@@ -1292,10 +1409,10 @@ $('#rgL').onclick=async e=>{
   const c=b.closest('.rqc'),id=+c.dataset.id;
   try{
     if(b.dataset.a==='approve'){
-      const jab=c.querySelector('.rqj').value,bam=usBam(c.querySelector('input.rqb').value);
-      if(!FULLJ.includes(jab)&&!bam.length){toast('Isi area BAM dulu');return}
+      const jab=c.querySelector('.rqj').value,p=RQP.get(id);
+      if(!FULLJ.includes(jab)&&!(p&&p.any())){toast('Pilih area dulu: minimal satu KOORBAM, BAM, atau CABANG');return}
       b.disabled=true;
-      const j=await api('/api/admin/requests',{action:'approve',id,jabatan:jab,bam_scope:bam});
+      const j=await api('/api/admin/requests',{action:'approve',id,jabatan:jab,area:FULLJ.includes(jab)?undefined:p.get()});
       toast('Disetujui — '+j.nik+' sekarang bisa masuk',3500);
       if(j.unknownBam&&j.unknownBam.length)toast('Peringatan: BAM tidak ada di data toko: '+j.unknownBam.join(', '),5500);
     }else{

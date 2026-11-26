@@ -35,7 +35,7 @@ export async function dataVersion(db) {
 }
 
 export async function cacheKey(fn, a, user, version) {
-  const scope = isPusat(user) ? 'ALL' : [user.jabatan, ...(user.bam_scope || [])].join('|');
+  const scope = isPusat(user) ? 'ALL' : [user.jabatan, ...(user.bam_scope || []), '#', ...(user.cabang_scope || [])].join('|');
   return sha256Hex(JSON.stringify([FN_REV[fn] || CACHE_REV, fn, a, scope, version, Math.floor(Date.now() / TTL_BUCKET_MS)]));
 }
 
