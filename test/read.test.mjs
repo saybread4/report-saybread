@@ -267,3 +267,16 @@ test('Rank BAM (grup bam): dimuat terpisah (a[3]=bam); hanya Koorbam, Admin Koor
     await assert.rejects(() => handlers.getrankcab.run({ db: mk(), user: u(jabatan) }, [[], '', false, 'bam']), (e) => e.status === 403, jabatan + ' ditolak');
   }
 });
+
+test('getkoorbam: daftar KOORBAM dari akun berjabatan KOORBAM; non-pusat hanya BAM dalam areanya; jabatan tanpa hak Rank BAM mendapat daftar kosong', async () => {
+  const db = mock([[/FROM users WHERE jabatan = 'KOORBAM'/, [
+    { nama: 'Andi', bam_scope: JSON.stringify(['BAM A', 'BAM B']) },
+    { nama: 'Budi', bam_scope: JSON.stringify(['BAM C']) },
+    { nama: 'Kosong', bam_scope: null },
+  ]]]);
+  const all = await handlers.getkoorbam.run({ db, user: { jabatan: 'ADMINISTRATOR', bam_scope: null } }, []);
+  assert.deepEqual(all.list, [['Andi', ['BAM A', 'BAM B']], ['Budi', ['BAM C']]]);
+  const mine = await handlers.getkoorbam.run({ db, user: { jabatan: 'KOORBAM', bam_scope: ['BAM A'] } }, []);
+  assert.deepEqual(mine.list, [['Andi', ['BAM A']]]);
+  assert.deepEqual((await handlers.getkoorbam.run({ db, user: { jabatan: 'BAS', bam_scope: ['BAM A'] } }, [])).list, []);
+});

@@ -853,10 +853,10 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
 
   <!-- ===== Halaman Rank (Cabang, Cabang PNL, BAS, BASTR, AM, AS) ===== -->
   <section class="page on" id="pgRank">
+    <div class="card"><div class="mrow"><div class="filters four" id="fR"></div><div class="tools"><button class="b p" id="rApply" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Terapkan</button><button class="b s" id="rReset" type="button"><svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg>Reset</button></div></div></div>
     <div class="subbar">
-      <div class="subtools" style="margin-left:0"><select id="rGrpSel" class="sel" title="Kelompok yang diranking"><option value="cab">Kelompok: Cabang</option><option value="pnl">Kelompok: Cabang PNL</option><option value="bam">Kelompok: BAM</option><option value="bas">Kelompok: BAS</option><option value="bastr">Kelompok: BASTR</option><option value="am">Kelompok: AM</option><option value="as">Kelompok: AS</option></select><button class="b p" id="rApply" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Terapkan</button></div>
-      <div class="subtools">
-        <div class="filters" id="fR" style="display:none;width:190px"></div>
+      <span class="seg big" id="rGrp"><button data-s="cab" class="on">Cabang</button><button data-s="pnl">Cabang PNL</button><button data-s="bam">BAM</button><button data-s="bas">BAS</button><button data-s="bastr">BASTR</button><button data-s="am">AM</button><button data-s="as">AS</button></span>
+            <div class="subtools">
         <select id="rBln" class="sel" title="Pilih bulan"></select>
         <select id="rCmp" class="sel" title="Pembanding untuk kolom growth SPD dan varian BAP">
           <option value="same">vs Tgl yang sama bulan lalu</option>
@@ -1324,7 +1324,7 @@ $('#rsL').onclick=async e=>{
 
 /* ================= util ================= */
 const KEYS=['cab','bas','as','tk','ds','jn'];
-const LABEL={bam:'BAM',pnl:'CAB PNL',cab:'CABANG',bas:'BAS',bastr:'BASTR',am:'AM',as:'AS',tk:'KODE / TOKO',ds:'DESKRIPSI',jn:'JENIS'};
+const LABEL={kb:'KOORBAM',bam:'BAM',pnl:'CAB PNL',cab:'CABANG',bas:'BAS',bastr:'BASTR',am:'AM',as:'AS',tk:'KODE / TOKO',ds:'DESKRIPSI',jn:'JENIS'};
 const IM=8; // indeks MODIS pada baris data stock
 const COL={cab:0,bas:1,as:2,tk:3,ds:4,jn:5};
 const IQ=6,IP=7; // indeks STOCK_QTY dan QPD pada baris data stock
@@ -1393,6 +1393,16 @@ function mkFilters(root,keys,radios,dflt,onChange,src,seg){
   const rowsOf=()=>src?src.rows:(D.rows||[]),colOf=k=>src?src.COL[k]:COL[k],dl=k=>(src?src.DL:DL)[k],rk=k=>(src?src.RK:RK)[k];
   keys.forEach(k=>S.sel[k]=new Set());
   S.cascade=()=>{
+    if(src&&src.faceted){   // saling terhubung: pilihan tiap filter mengikuti pilihan SEMUA filter lain (bukan hanya yang di kirinya)
+      const sub=skip=>{let cur=rowsOf();for(const j of keys){if(j===skip||!S.sel[j].size)continue;const cj=colOf(j);cur=cur.filter(r=>S.sel[j].has(r[cj]))}return cur};
+      for(let pass=0;pass<2;pass++)for(const k of keys){
+        const c=colOf(k),seen=new Set();
+        for(const r of sub(k))seen.add(r[c]);
+        S.opt[k]=[...seen].sort((a,b)=>rk(k)[a]-rk(k)[b]);
+        [...S.sel[k]].forEach(v=>{if(!seen.has(v))S.sel[k].delete(v)});
+      }
+      S.cur=sub(null);return;
+    }
     const wait=!src&&!D.rows;      // baris Stock belum tiba: daftar pilihan diambil dari kamus lengkap
     let cur=rowsOf();
     for(const k of keys){
@@ -1532,7 +1542,7 @@ function setRows(rows){
 function useScope(){
   const ok=new Set();D.d.cab.forEach((c,i)=>{if(SCOPE.all||SCOPE.cabs.has(norm(c)))ok.add(i)});
   D.rows=SCOPE.all?D.rowsAll:D.rowsAll.filter(r=>ok.has(r[0]));
-  BYTK=null;BSRC=null;RD=null;CMETA=null;FC=null;CAPP=null;ORGM=null;RDC.clear();FR=null;
+  BYTK=null;BSRC=null;RD=null;CMETA=null;FC=null;CAPP=null;ORGM=null;RDC.clear();FR=null;RAPP=null;
   D.srows=scopeSrows();FS.reset();mkFM();mkFB();clearOut();mCabFill();
   if(TAB==='Rank'){rankSelect();return}
   if(TAB!=='Stock'){if(onMon())monSelect();if(TAB==='BAS')basSelect();return}
@@ -3368,57 +3378,80 @@ $('#basTab').onclick=e=>{
    QPD/SPD dihitung sama seperti rekap Perform Cabang: total ÷ jumlah toko-hari yang SALES_QTY-nya > 0.
    JML TK = jumlah toko tertinggi pada periode itu. */
 let RD=null,RCUR=null,RGRP='cab',RSEL='',RSORT='growh',RCMP='same',RBLNKEY='';
-let FR=null,frT=0;const RDC=new Map();
-const rkCabs=()=>{   // administrator + SEMUA BAM: cabang dari BAM yang dipilih di filter (kosong = semua)
-  if(!SCOPE)return[];if(!SCOPE.all)return SCOPE.names;
-  if(!FR||!FR.sel.bam.size||!GB)return[];
-  const o=new Set();GB.rows.forEach(r=>{if(FR.sel.bam.has(r[0]))o.add(GB.cab[r[1]])});return[...o];
+let FR=null,FRP=null,RAPP=null;const RDC=new Map();
+/* Filter Rank: KOORBAM > BAM > CAB PNL > CABANG, saling terhubung. Data baru dimuat setelah klik Terapkan (RAPP = filter yang sedang diterapkan). */
+const rkNone=()=>!FR||!FR.keys.some(k=>FR.sel[k].size);
+const rkCabs=()=>{   // nama cabang dari filter yang dipilih sekarang (kosong = semua dalam cakupan)
+  if(!SCOPE)return[];
+  if(rkNone())return SCOPE.all?[]:SCOPE.names;
+  const o=new Set();FR.cur.forEach(r=>o.add(FR.dl.cab[r[3]]));return[...o];
 };
 const rkKey=()=>SCOPE?rkCabs().slice().sort().join('|')+'#'+SCOPE.key:'';
-function rkScope(){
-  const n=FR?FR.sel.bam.size:0,a=n?[...FR.sel.bam].map(i=>GB.bam[i]):[];
-  return SCOPE.bam+' · '+SCOPE.label+(n?' · BAM: '+(n<=2?a.join(', '):n+' dipilih'):'');
+function rkScopeNow(){
+  const p=[];
+  if(FR)FR.keys.forEach(k=>{const n=FR.sel[k].size;if(n){const a=[...FR.sel[k]].map(i=>FR.dl[k][i]);p.push(LABEL[k]+': '+(n<=2?a.join(', '):n+' dipilih'))}});
+  return SCOPE.bam+' · '+SCOPE.label+(p.length?' · '+p.join(' · '):'');
 }
-function mkFR(){   // filter BAM di halaman Rank (hanya administrator dengan cakupan SEMUA BAM)
-  const box=$('#fR'),on=!!(SCOPE&&SCOPE.all&&isFull()&&GB);
-  box.style.display=on?'':'none';
-  if(!on){FR=null;return}
-  if(FR)return;
-  const ix=GB.bam.map((_,i)=>i).sort((a,b)=>CO(GB.bam[a],GB.bam[b])),rk=[];ix.forEach((v,r)=>rk[v]=r);
-  FR=mkFilters(box,['bam'],[],{},()=>{clearTimeout(frT);frT=setTimeout(()=>{RD=null;if(TAB==='Rank')rankSelect()},700)},
-    {rows:GB.bam.map((_,i)=>[i]),COL:{bam:0},DL:{bam:GB.bam},RK:{bam:rk}});
-  FR.build();FR.reset();
+const rkScope=()=>RAPP?RAPP.scope:rkScopeNow();
+function ensureFR(){
+  if(FR)return Promise.resolve();
+  return FRP||(FRP=(async()=>{
+    const okB=!!(ME&&ME.can&&ME.can.rankbam);
+    let meta=null;try{meta=scopeMeta(await gsr('getCabMeta',false))}catch(e){}   // langsung dari server (bukan simpanan Trend) supaya sesuai cakupan sekarang
+    let kbl=[];if(okB){try{kbl=((await gsr('getKoorbam'))||{}).list||[]}catch(e){kbl=[]}}
+    const kbN=kbl.map(x=>x[0]),NOKB='(Belum ada KOORBAM)';let noKb=-1;
+    const bamN=(GB&&GB.bam)||[],pnlN=meta?meta.pnl.map(x=>x||'(kosong)'):[],cabN=meta?meta.cab.map(x=>x||'(kosong)'):[];
+    const cm=new Map();if(meta)meta.cab.forEach((n,i)=>{const k=norm(n);if(!cm.has(k))cm.set(k,i)});
+    const pc=new Map();if(meta)(meta.pairs||[]).forEach(([p,c])=>{if(!pc.has(c))pc.set(c,[]);pc.get(c).push(p)});
+    const kbOf=bamN.map(b=>{const o=[];kbl.forEach((x,i)=>{if(x[1].some(y=>norm(y)===norm(b)))o.push(i)});return o});
+    const rows=[],seen=new Set();
+    ((GB&&GB.rows)||[]).forEach(([bi,ci])=>{
+      const nm=GB.cab[ci];if(SCOPE&&!SCOPE.all&&!SCOPE.cabs.has(norm(nm)))return;
+      const mc=cm.get(norm(nm));if(mc===undefined)return;
+      let ks=kbOf[bi];if(!ks.length){if(noKb<0){noKb=kbN.length;kbN.push(NOKB)}ks=[noKb]}
+      for(const p of pc.get(mc)||[])for(const k of ks){const key=k+'_'+bi+'_'+p+'_'+mc;if(seen.has(key))continue;seen.add(key);rows.push([k,bi,p,mc])}
+    });
+    const dl={kb:kbN,bam:bamN,pnl:pnlN,cab:cabN},rk={};
+    for(const k in dl){const ix=dl[k].map((_,i)=>i).sort((a,b)=>k==='kb'&&dl[k][a]===NOKB?1:k==='kb'&&dl[k][b]===NOKB?-1:CO(dl[k][a],dl[k][b]));rk[k]=[];ix.forEach((v,r)=>rk[k][v]=r)}
+    const keys=okB?['kb','bam','pnl','cab']:['bam','pnl','cab'];
+    const f=mkFilters($('#fR'),keys,[],{},()=>{},{rows,COL:{kb:0,bam:1,pnl:2,cab:3},DL:dl,RK:rk,faceted:true});
+    f.keys=keys;f.dl=dl;f.build();f.reset();FR=f;
+  })().finally(()=>{FRP=null}));
 }
-/* Rank memuat SATU kelompok per klik Terapkan (dulu 6 kelompok sekaligus = ~24 query berat). Hasil disimpan per cakupan, kelompok lain digabung ke objek yang sama. */
-function syncRGrp(){
-  const okB=!!(ME&&ME.can&&ME.can.rankbam),sel=$('#rGrpSel'),ob=sel.querySelector('option[value="bam"]');   // Rank BAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
-  if(ob)ob.hidden=ob.disabled=!okB;
-  if(!okB&&RGRP==='bam')RGRP='cab';
-  sel.value=RGRP;
+function syncRTabs(){
+  const one=rkOneCab(),pb=document.querySelector('#rGrp [data-s="pnl"]');if(pb)pb.style.display=one?'none':'';
+  const okB=!!(ME&&ME.can&&ME.can.rankbam),bb=document.querySelector('#rGrp [data-s="bam"]');   // Rank BAM: hanya Koorbam, Admin Koorbam, Administrator, Admin Utama
+  if(bb)bb.style.display=okB?'':'none';
+  if((one&&RGRP==='pnl')||(!okB&&RGRP==='bam')){setRGrp('cab');rkLoad('cab');return true}   // tab yang dipilih tidak tersedia: pindah ke Cabang
+  return false;
 }
-const rkPrompt=()=>{$('#rInfo').innerHTML='';$('#rOut').innerHTML='<div class="card empty" style="margin-top:8px"><div class="e"><svg class="ic" aria-hidden="true"><use href="#i-rank"/></svg></div><div>Pilih <b>Kelompok</b> lalu klik <b>Terapkan</b>.</div></div>'};
+function setRGrp(g){RGRP=g;document.querySelectorAll('#rGrp button').forEach(x=>x.classList.toggle('on',x.dataset.s===g))}
+const rkPrompt=()=>{$('#rInfo').innerHTML='';$('#rOut').innerHTML='<div class="card empty" style="margin-top:8px"><div class="e"><svg class="ic" aria-hidden="true"><use href="#i-rank"/></svg></div><div>Pilih filter <b>KOORBAM / BAM / CAB PNL / CABANG</b> (boleh dikosongkan = semua), lalu klik <b>Terapkan</b>.</div></div>'};
 function rankSelect(){
   RCUR=null;$('#dlR button').disabled=true;
   if(!SCOPE)return;
-  mkFR();syncRGrp();
-  const hit=RDC.get(rkKey());
-  if(hit&&hit[RGRP]){RD=hit;renderR();return}
-  RD=null;rkPrompt();
+  ensureFR().then(()=>{
+    if(TAB!=='Rank')return;
+    if(RAPP){rkLoad(RGRP);return}      // filter sudah diterapkan sebelumnya: tampilkan lagi (dari simpanan bila ada)
+    RD=null;rkPrompt();
+  });
 }
 function rankApply(){
   if(!SCOPE)return;
-  mkFR();
-  const g=$('#rGrpSel').value,key=rkKey(),hit=RDC.get(key);
-  RGRP=g;syncRGrp();
+  ensureFR().then(()=>{RAPP={key:rkKey(),cabs:rkCabs(),scope:rkScopeNow()};rkLoad(RGRP)});
+}
+/* Memuat SATU kelompok (tab) untuk filter yang diterapkan; kelompok lain digabung ke hasil yang sama (disimpan per filter). */
+function rkLoad(g){
+  const A=RAPP,hit=RDC.get(A.key);
   if(hit&&hit[g]){RD=hit;renderR();return}
   RD=null;RCUR=null;$('#dlR button').disabled=true;$('#rInfo').innerHTML='';
   $('#rOut').innerHTML=spin();const t0=pgStart('r'),bt=$('#rApply');bt.disabled=true;
-  gsr('getRankCab',rkCabs(),TOKEN,false,g).then(r=>{
+  gsr('getRankCab',A.cabs,TOKEN,false,g).then(r=>{
     pgEnd('r',t0);
-    let cur=RDC.get(key);
-    if(cur){cur[g]=r[g];cur._prepG(g)}else{prepRD(r);RDC.set(key,r);cur=r}
-    if(rkKey()===key&&RGRP===g){RD=cur;if(TAB==='Rank')renderR()}
-  }).catch(e=>{pgEnd('r',t0);if(TAB==='Rank')$('#rOut').innerHTML='<div class="card empty err">Gagal memuat data Rank:\n'+esc((e&&e.message)||e)+'</div>'})
+    let cur=RDC.get(A.key);
+    if(cur){cur[g]=r[g];cur._prepG(g)}else{prepRD(r);RDC.set(A.key,r);cur=r}
+    if(RAPP===A&&RGRP===g){RD=cur;if(TAB==='Rank')renderR()}
+  }).catch(e=>{pgEnd('r',t0);if(RAPP===A&&TAB==='Rank')$('#rOut').innerHTML='<div class="card empty err">Gagal memuat data Rank:\n'+esc((e&&e.message)||e)+'</div>'})
     .finally(()=>{bt.disabled=false});
 }
 /* per[gi] = Map(tanggal 'yyyy-MM-dd' -> [SALES_QTY, SALES_RP, BA_RP, JML_TOKO, JML_TOKO_SALES>0]); last[bulan] = tanggal terakhir yang ada penjualannya */
@@ -3501,7 +3534,7 @@ function loadRankBam(){
 function renderR(){
   RCUR=null;$('#dlR button').disabled=true;
   if(!RD)return;
-  syncRGrp();
+  if(syncRTabs())return;
   const g=RD[RGRP],gname=GL[RGRP];
   if(!g){$('#rOut').innerHTML='<div class="card empty err" style="margin-top:8px">Data Rank belum lengkap. Pastikan Code.gs versi terbaru sudah di-deploy ulang.</div>';return}
   $('#rInfo').innerHTML='<div class="info2"><span><small>CAKUPAN</small><b>'+esc(rkScope())+'</b></span><span><small>JML '+gname+'</small><b>'+nf(g.names.length)+'</b></span><span><small>PEMBANDING</small><b>'+(RCMP==='off'?'Tanpa':RCMP==='closing'?'Closing bulan lalu':'Tgl yang sama')+'</b></span></div>';
@@ -3553,8 +3586,14 @@ $('#rOut').addEventListener('click',e=>{
   inp.onblur=()=>fin(0);
   inp.onclick=ev=>ev.stopPropagation();
 });
+$('#rGrp').onclick=e=>{
+  const b=e.target.closest('button');if(!b||b.dataset.s===RGRP)return;
+  setRGrp(b.dataset.s);closeAll();
+  if(!RAPP){rkPrompt();return}
+  rkLoad(RGRP);
+};
 $('#rApply').onclick=()=>{closeAll();rankApply()};
-$('#rGrpSel').onchange=()=>{};   // hanya memilih; data dimuat saat Terapkan
+$('#rReset').onclick=()=>{if(FR){FR.reset();closeAll()}};
 $('#rBln').onchange=e=>{RSEL=e.target.value;renderR()};
 $('#rCmp').onchange=e=>{CMPU.r=true;RCMP=e.target.value;renderR()};
 $('#rSort').onchange=e=>{RSORT=e.target.value;renderR()};
@@ -3881,12 +3920,12 @@ let cabRows=[];
 async function rdEnsure(){
   const okB=!!(ME&&ME.can&&ME.can.rankbam),need=GR.filter(k=>k!=='bam'||okB),full=r=>!!r&&need.every(k=>r[k]);
   if(full(RD))return RD;
-  const k=rkKey();let r=RDC.get(k);
+  const k=RAPP?RAPP.key:rkKey(),cb=RAPP?RAPP.cabs:rkCabs();let r=RDC.get(k);
   if(!full(r)){
-    const f=await gsr('getRankCab',rkCabs(),TOKEN,false,'');   // 6 kelompok non-BAM sekaligus (hanya untuk Excel)
+    const f=await gsr('getRankCab',cb,TOKEN,false,'');   // 6 kelompok non-BAM sekaligus (hanya untuk Excel)
     if(!r){prepRD(f);r=f;RDC.set(k,r)}else GR.forEach(g=>{if(!r[g]&&f[g]){r[g]=f[g];r._prepG(g)}})
   }
-  if(okB&&!r.bam){const b=await gsr('getRankCab',rkCabs(),TOKEN,false,'bam');r.bam=b.bam;r._prepG('bam')}   // sheet Rank BAM ikut Excel
+  if(okB&&!r.bam){const b=await gsr('getRankCab',cb,TOKEN,false,'bam');r.bam=b.bam;r._prepG('bam')}   // sheet Rank BAM ikut Excel
   return RD=r;
 }
 async function masterExcel(o){

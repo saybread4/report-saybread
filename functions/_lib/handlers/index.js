@@ -2,6 +2,7 @@
 // Semua fungsi baca WAJIB memakai bamWhere()/kodeWhere() supaya data dibatasi sesuai area pengguna.
 //
 import { bamWhere } from '../scope.js';
+import { isPusat, canRankBam, parseScope } from '../auth.js';
 import { norm, nz, num } from '../util.js';
 import { queryAll } from '../ks.js';
 import { readHandlers } from './read.js';
@@ -45,6 +46,25 @@ const baseHandlers = {
       }
       const out = [...cnt].map(([key, j]) => [Math.floor(key / 100000), key % 100000, j]);
       return { bam: bams, cab: cabs, rows: out, warn: '' };
+    },
+  },
+
+  // Daftar KOORBAM beserta BAM di bawahnya, untuk filter halaman Rank. Tabel toko di TiDB belum punya kolom K.BAM, jadi diturunkan dari akun
+  // berjabatan KOORBAM (nama akun + daftar BAM area-nya). Hanya untuk jabatan yang boleh melihat Rank BAM; jabatan lain mendapat daftar kosong.
+  // Pengguna non-pusat hanya melihat BAM dalam areanya sendiri.
+  getkoorbam: {
+    need: 'view',
+    async run({ db, user }) {
+      if (!canRankBam(user)) return { list: [] };
+      const mine = isPusat(user) ? null : new Set((user.bam_scope || []).map((x) => String(x).trim().toUpperCase()));
+      const rows = await db.query("SELECT nama, bam_scope FROM users WHERE jabatan = 'KOORBAM' AND aktif = 1 ORDER BY nama");
+      const list = [];
+      for (const r of rows) {
+        let bams = (parseScope(r.bam_scope) || []).map((x) => String(x).trim()).filter(Boolean);
+        if (mine) bams = bams.filter((b) => mine.has(b.toUpperCase()));
+        if (bams.length) list.push([String(r.nama || '').trim(), bams]);
+      }
+      return { list };
     },
   },
 
