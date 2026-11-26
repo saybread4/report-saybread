@@ -106,6 +106,24 @@ test('gethistory: agregat bulanan, dimensi, dan bulan berjalan', async () => {
   assert.equal(r2.cur, null);
 });
 
+test('gethistory: tabel trend > 10.000 baris tetap lengkap (driver memotong di 10.000 baris tanpa LIMIT)', async () => {
+  // 600 toko x 3 tahun x 12 bulan = 21.600 baris, urutan fisik per toko (bukan per periode) seperti tabel sungguhan
+  const TR = [];
+  for (let t = 0; t < 600; t++) for (const y of [2024, 2025, 2026]) for (let b = 1; b <= (y === 2026 ? 10 : 12); b++)
+    TR.push({ tahun: y, bulan: b, cab_pnl: 'P1', cabang: 'C1', kode: 'K' + String(t).padStart(4, '0'), toko: 'T' + t, jml_hari: 30, sales_qty: 10, sales_rp: 1000, ba_rp: 10, margin: 100, pnl: 1 });
+  const driver = (s, a) => {
+    const m = /ORDER BY (.+?) LIMIT (\d+) OFFSET (\d+)/.exec(s);
+    if (!m) return TR.slice(0, 10000);                       // tanpa LIMIT: terpotong diam-diam
+    const rows = TR.slice().sort((p, q) => p.tahun - q.tahun || p.bulan - q.bulan || (p.kode < q.kode ? -1 : p.kode > q.kode ? 1 : 0));
+    return rows.slice(+m[3], +m[3] + Math.min(+m[2], 10000));
+  };
+  const routes = [...common, [/FROM trend/, driver]];
+  const r = await handlers.gethistory.run({ db: mock(routes), user: pusat }, [['P1'], [], [], false]);
+  assert.equal(r.rows.length, 12 + 12 + 10);                  // semua bulan terisi, termasuk Okt 2026
+  assert.deepEqual(r.rows[r.rows.length - 1].slice(0, 3), [2026, 10, 600 * 1000]);
+  assert.ok(r.rows.every((x) => x[5] === 600));               // 600 toko aktif di tiap bulan
+});
+
 test('getrankcab: nama dan baris per dimensi, nama BAS dari tabel toko', async () => {
   const routes = [...common,
     [/^SELECT kode, toko, bam, bas, bastr, am, `as` AS as_ FROM toko/, [
