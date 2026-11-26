@@ -840,5 +840,7 @@ async function trendRows(db, user, a, cols) {
     if (!ok.size) return [];
     const w = inList(NORM('kode'), [...ok]); conds.push(w.sql); params.push(...w.params);
   }
-  return db.query(`SELECT ${cols} FROM trend${conds.length ? ' WHERE ' + conds.join(' AND ') : ''}`, params);
+  // Driver TiDB memotong hasil di 10.000 baris tanpa galat (CAB PNL besar x 12 bulan x 3 tahun bisa lebih dari itu,
+  // sehingga bulan-bulan terakhir hilang). Baca per halaman dengan urutan tetap (kunci unik tahun, bulan, kode).
+  return queryAll(db, `SELECT ${cols} FROM trend${conds.length ? ' WHERE ' + conds.join(' AND ') : ''}`, params, 'tahun, bulan, kode');
 }

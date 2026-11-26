@@ -546,6 +546,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
   header .wrap{flex-wrap:wrap;gap:6px 10px}
   header .brand{flex:none}
   header nav{order:1;flex:0 1 auto}
+  .mpill{order:1;flex:none}   /* Master Excel sejajar dengan menu halaman (Stock ... Trend / History), tetap pil terpisah */
   .umenu{order:2;margin-left:auto}
   .mbox{order:3;flex:1 1 100%;margin-left:0;padding-left:0;border-left:0;padding-top:2px;border-top:1px solid rgba(255,255,255,.12);padding-top:6px}
 }
@@ -554,6 +555,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
   header .brand{flex:1 1 auto;min-width:0}
   .umenu{order:1;margin-left:auto}
   header nav{order:2}
+  .mpill{order:2}
   .mbox{order:3}
 }
 @media(max-width:600px){
@@ -733,11 +735,11 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <button data-p="BAS">Monitor Area</button>
     <button data-p="Trend">Trend / History</button>
   </nav>
+  <span class="mpill">
+    <button id="bMaster" class="mx" title="Buka halaman Download Master Excel: pilih bulan, pembanding, dan isi file"><svg class="ic" aria-hidden="true"><use href="#i-sheet"/></svg>Master Excel</button>
+  </span>
   <div class="mbox">
     <div class="chip" id="scp" style="display:none;cursor:pointer" title="Klik untuk memilih BAM / cabang lagi"></div>
-    <span class="mpill">
-      <button id="bMaster" class="mx" title="Buka halaman Download Master Excel: pilih bulan, pembanding, dan isi file"><svg class="ic" aria-hidden="true"><use href="#i-sheet"/></svg>Master Excel</button>
-    </span>
     <button id="bGempar" type="button" title="Kelola tanggal Gempar (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg>Gempar</button>
     <button id="bAdm" type="button" title="Kelola pengguna (Admin Utama / Administrator)"><svg class="ic" aria-hidden="true"><use href="#i-unlock"/></svg>User<span class="bdg" id="admBdg" style="display:none"></span></button>
     <button id="bRfHp" type="button" title="Hitung ulang data ringkasan agar Rank, Perform, dan Monitor memakai data terbaru (administrator)"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Perbarui Dashboard</button>
@@ -4624,6 +4626,7 @@ function dlBgt(f){const R=window.BGT;if(!R){toast('Data budged toko belum siap')
 .tqf label{display:flex;flex-direction:column;gap:3px;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.05em}
 .tqf select,.tqf input[type=text],.tqf input:not([type]){height:34px;border:1px solid var(--bd);border-radius:9px;padding:0 10px;font:inherit;font-size:12.5px;font-weight:500;text-transform:none;letter-spacing:0;background:#fff;color:var(--deep);min-width:128px;max-width:230px}
 .tqf input#tqTk{min-width:200px}
+.tqf .tqtools{display:flex;gap:6px;align-items:center}.tqf .tqtools .b{height:34px;display:inline-flex;align-items:center;gap:5px;font-size:12.5px}   /* tinggi disamakan dengan kolom isian di sebelahnya */
 .tqseg{display:inline-flex;border:1px solid var(--bd);border-radius:9px;overflow:hidden}
 .tqseg button{border:0;background:#fff;padding:0 13px;height:34px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--deep)}
 .tqseg button.on{background:var(--pr);color:#fff}
@@ -4721,7 +4724,7 @@ function tqFilters(){
     +`<label>BANDINGKAN<span class="tqseg" id="tqCmp"><button data-c="1" class="${TRS.cmp===1?'on':''}">1 tahun lalu</button><button data-c="2" class="${TRS.cmp===2?'on':''}">2 tahun lalu</button></span></label>`
     +(yrs.length?`<label>TAHUN<select id="tqYr">${yrs.map(y=>`<option value="${y}"${y===Yb?' selected':''}>${y}</option>`).join('')}</select></label>`:'')
     +`<label class="tqsw${hasCur?'':' off'}" title="${hasCur?'Tambahkan bulan yang sedang berjalan dari data harian':'Belum ada bulan berjalan di luar histori'}"><input type="checkbox" id="tqCur"${TRS.cur&&hasCur?' checked':''}${hasCur?'':' disabled'}><span>Tampilkan bulan berjalan</span></label>`
-    +`<label>&nbsp;<span class="tqdl"><button id="tqApply" class="b p">Terapkan</button><button id="tqRs">Reset</button></span></label>`;
+    +`<div class="tools tqtools"><button id="tqApply" class="b p" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Terapkan</button><button id="tqRs" class="b s" type="button"><svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg>Reset</button></div>`;
 }
 function tqArgs(){
   const m=TRM,scoped=SCOPE&&!SCOPE.all;let cabs=[];
