@@ -32,6 +32,15 @@ export async function loadHierarchy(db) {
 // Untuk layar admin: kegagalan membaca hierarki tidak boleh menggagalkan seluruh halaman (dropdown saja yang kosong).
 export const loadHierarchySafe = async (db) => { try { return await loadHierarchy(db); } catch (e) { console.error('hierarki gagal dibaca', e && e.message); return []; } };
 
+// Jabatan KOORBAM memilih KOORBAM saja, jabatan BAM memilih BAM saja; sisanya (BAM/CABANG di bawahnya) otomatis semua.
+// Jabatan lain memakai ketiga pilihan. Dilakukan di server juga, bukan hanya dengan menyembunyikan dropdown di layar.
+export function areaForJabatan(jabatan, a) {
+  a = a && typeof a === 'object' ? a : {};
+  if (jabatan === 'KOORBAM') return { koorbam: a.koorbam };
+  if (jabatan === 'BAM') return { bam: a.bam };
+  return a;
+}
+
 export const hasSelection = (a) => !!a && typeof a === 'object' && (list(a.koorbam).length || list(a.bam).length || list(a.cabang).length) > 0;
 
 // Pilihan -> { bam, cabang, sel }. Melempar 400 bila kosong atau tidak cocok dengan data toko.

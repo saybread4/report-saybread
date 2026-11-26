@@ -7,7 +7,7 @@ import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
 import { requireUser, audit, JABATAN, LABEL, normNik, normScope, parseScope, isUtama, isFullRole } from '../../_lib/auth.js';
 import { hashPassword, tempPassword, checkPasswordPolicy, iterFrom } from '../../_lib/security.js';
-import { loadHierarchySafe, hasSelection, resolveArea, packArea, readArea, areaText } from '../../_lib/area.js';
+import { loadHierarchySafe, areaForJabatan, hasSelection, resolveArea, packArea, readArea, areaText } from '../../_lib/area.js';
 
 const row = (r) => ({
   nik: r.nik, nama: r.nama, jabatan: r.jabatan, label: LABEL[r.jabatan] || r.jabatan,
@@ -42,7 +42,7 @@ function scopeFor(jabatan, input) {
 // Tanpa pilihan baru, area yang sudah ada dipertahankan apa adanya (mis. hanya jabatan yang diubah tidak menghapus pembatas cabang).
 async function scopeStore(db, jabatan, b, existingRaw) {
   if (isFullRole(jabatan)) return null;
-  if (hasSelection(b.area)) return packArea(await resolveArea(db, b.area));
+  if (hasSelection(b.area)) return packArea(await resolveArea(db, areaForJabatan(jabatan, b.area)));
   if (b.bam_scope !== undefined) return scopeFor(jabatan, b.bam_scope);
   const cur = readArea(existingRaw);
   if (!cur.bam.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');

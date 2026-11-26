@@ -85,7 +85,7 @@ main{padding:10px 12px 24px}
 .opt input{accent-color:var(--pr)}
 /* pemilih area KOORBAM / BAM / CABANG (daftar akun, kelola pengguna): panel mengembang di tempat (bukan melayang) agar tidak terpotong kartu/modal */
 .ap{display:grid;gap:10px}
-.ap.row{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
+.ap.row{grid-template-columns:repeat(var(--n,3),minmax(0,1fr));align-items:start}
 .ap.gate{gap:14px;margin-bottom:6px}
 .ap .apf{min-width:0}
 .ap .apf>label{display:block;font-size:11px;font-weight:700;color:var(--mu);margin:0 0 3px;letter-spacing:.04em}
@@ -678,7 +678,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
           <div class="gs">Daftar akun baru. Admin akan memverifikasi jabatan dan area Anda sebelum akun aktif.</div>
           <div class="gf"><label for="rgNik">NIK</label><input id="rgNik" autocomplete="username" autocapitalize="characters" spellcheck="false"></div>
           <div class="gf"><label for="rgNama">Nama lengkap</label><input id="rgNama" autocomplete="name"></div>
-          <div class="gf"><label for="rgJab">Jabatan</label><select id="rgJab"><option value="">Pilih jabatan…</option><option value="KOORBAM">Koorbam</option><option value="BAM">BAM</option><option value="BAS">BAS</option><option value="BASTR">BASTR</option></select></div>
+          <div class="gf"><label for="rgJab">Jabatan</label><select id="rgJab"><option value="">Pilih jabatan…</option><option value="KOORBAM">KOORBAM</option><option value="BAM">BAM</option><option value="BAS">BAS</option><option value="BASTR">BASTR</option></select></div>
           <div class="ap gate" id="rgAp"></div>
           <div class="ghint" id="rgApHint">Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.</div>
           <div class="gf"><label for="rgKontak">No. WhatsApp <span class="gopt">(opsional)</span></label><input id="rgKontak" inputmode="tel" autocomplete="tel" placeholder="Agar admin bisa menghubungi Anda"></div>
@@ -1089,12 +1089,13 @@ function showPw(old,msg){
   focusSoon(old?'#pwNew':'#pwOld');
 }
 let RGP=null;
+function rgJabUI(){const m=apMode($('#rgJab').value);if(RGP)RGP.setMode(m);if(APH&&APH.length)$('#rgApHint').textContent=apHint(m)}
 async function showReg(){
   gView('reg');$('#rgMsg').textContent='';focusSoon('#rgNik');
   if(!RGP)RGP=areaPicker($('#rgAp'));
   try{
-    RGP.setHier(await apLoad());
-    $('#rgApHint').textContent=APH.length?'Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.':'Daftar area belum tersedia (data toko belum ada). Hubungi admin.';
+    RGP.setHier(await apLoad());rgJabUI();
+    if(!APH.length)$('#rgApHint').textContent='Daftar area belum tersedia (data toko belum ada). Hubungi admin.';
   }catch(e){$('#rgApHint').textContent='Gagal memuat daftar area: '+((e&&e.message)||e)+' — tutup lalu buka lagi halaman daftar.'}
 }
 function showRst(){gView('rst');$('#rsMsg').textContent='';$('#rsNik').value=$('#nikNik').value.trim();focusSoon($('#rsNik').value?'#rsKontak':'#rsNik')}
@@ -1204,6 +1205,7 @@ $('#goRst').onclick=e=>{e.preventDefault();showRst()};
 $('#rgBack').onclick=e=>{e.preventDefault();showLogin('')};
 $('#rsBack').onclick=e=>{e.preventDefault();showLogin('')};
 $('#doneBack').onclick=()=>showLogin('');
+$('#rgJab').onchange=rgJabUI;
 $('#rgGo').onclick=doRegister;onEnter('#rgPw2',doRegister);
 $('#rsGo').onclick=doReset;onEnter('#rsKontak',doReset);onEnter('#rsNik',doReset);
 
@@ -1256,6 +1258,7 @@ function areaPicker(root,o){
     const m=new Map();for(const r of rowsFor(k)){const v=String(r[i]||'').trim();if(v&&!m.has(apU(v)))m.set(apU(v),v)}
     OPT[k]=m;for(const u of [...S[k].keys()])if(!m.has(u))S[k].delete(u)}};
   const any=()=>KEYS.some(([k])=>S[k].size>0);
+  let VIS=new Set(['k','b','c']);   // dropdown yang tampil; yang disembunyikan tidak dipakai (otomatis semua di bawah pilihan yang tampil)
   const fld=k=>root.querySelector('.apf[data-k='+k+']');
   const render=k=>{
     const f=fld(k),q=f.querySelector('.dd-search').value.trim().toLowerCase();
@@ -1287,15 +1290,21 @@ function areaPicker(root,o){
   });
   return{
     setHier(h){H=(h||[]).map(r=>[r[0]||'',r[1]||'',r[2]||'']);cascade();refresh()},
-    set(sel){   // sel = {k:[],b:[],c:[]} (nama); nama yang tidak ada di data toko dibuang
+    setMode(m){   // 'k' = hanya KOORBAM · 'b' = hanya BAM · lainnya = ketiganya
+      VIS=new Set(m==='k'?['k']:m==='b'?['b']:['k','b','c']);
+      KEYS.forEach(([k])=>{fld(k).style.display=VIS.has(k)?'':'none';if(!VIS.has(k))S[k].clear()});
+      root.style.setProperty('--n',VIS.size);cascade();refresh()},
+    set(sel){   // sel = {k:[],b:[],c:[]} (nama); nama yang tidak ada di data toko dibuang; dropdown yang disembunyikan diabaikan
       sel=sel||{};
       const lab=KEYS.map(([,,i])=>{const m=new Map();H.forEach(r=>{const v=String(r[i]||'').trim();if(v&&!m.has(apU(v)))m.set(apU(v),v)});return m});
-      KEYS.forEach(([k,,i])=>{S[k].clear();(sel[k]||[]).forEach(n=>{const u=apU(n);if(u)S[k].set(u,lab[i].get(u)||String(n).trim())})});
+      KEYS.forEach(([k,,i])=>{S[k].clear();if(!VIS.has(k))return;(sel[k]||[]).forEach(n=>{const u=apU(n);if(u)S[k].set(u,lab[i].get(u)||String(n).trim())})});
       cascade();refresh()},
     get(){return{koorbam:[...S.k.values()],bam:[...S.b.values()],cabang:[...S.c.values()]}},
     any,clear(){KEYS.forEach(([k])=>S[k].clear());cascade();refresh()},
   };
 }
+const apMode=j=>j==='KOORBAM'?'k':j==='BAM'?'b':'all';   // jabatan KOORBAM memilih KOORBAM saja, BAM memilih BAM saja
+const apHint=m=>m==='k'?'Pilih satu atau lebih KOORBAM. BAM dan cabang di bawahnya otomatis ikut.':m==='b'?'Pilih satu atau lebih BAM. KOORBAM dan cabangnya otomatis ikut.':'Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.';
 let APH=null;   // daftar [koorbam, bam, cabang] untuk form Daftar (tanpa login)
 async function apLoad(){if(APH)return APH;const j=await api('/api/auth/area-options');APH=(j&&j.h)||[];return APH}
 
@@ -1314,7 +1323,7 @@ async function usLoad(){
     usDraw();
   }catch(e){$('#usL').innerHTML='<tr><td colspan="6" style="color:#b4361f">'+esc(e.message||e)+'</td></tr>'}
 }
-const usJabUI=()=>{$('#usApW').style.display=FULLJ.includes($('#usJab').value)?'none':''};
+const usJabUI=()=>{const j=$('#usJab').value;$('#usApW').style.display=FULLJ.includes(j)?'none':'';if(USP)USP.setMode(apMode(j))};
 function usDraw(){
   $('#usL').innerHTML=US.users.map(u=>`<tr><td>${esc(u.nik)}</td><td>${esc(u.nama)}</td><td>${esc(u.label)}</td>
     <td style="white-space:normal;max-width:300px">${u.bam_scope===null?'<i>semua</i>':esc(u.area_text||(u.bam_scope||[]).join(', ')||'-')}</td>
@@ -1353,7 +1362,7 @@ $('#usX').onclick=()=>{$('#usW').style.display='none';usTmp('')};
 function arOpen(u){
   ARU=u;$('#arT').textContent='Area · '+u.nama+' ('+u.nik+')';
   if(!ARP){ARP=areaPicker($('#arAp'));$('#arAp').classList.add('row')}
-  ARP.setHier(US.hier||[]);
+  ARP.setHier(US.hier||[]);ARP.setMode(apMode(u.jabatan));
   const s=u.area_sel||{k:[],b:[],c:[]};
   ARP.set(s.k.length||s.b.length||s.c.length?s:{k:[],b:u.bam_scope||[],c:[]});   // akun lama: hanya daftar BAM
   $('#arW').style.display='flex';
@@ -1395,7 +1404,7 @@ function rqDraw(){
   const bams=[...new Set((RQ.hier||[]).map(h=>h[1]))];
   RQ.registrations.forEach(r=>{
     const el=$('#rgL').querySelector('.rqc[data-id="'+r.id+'"] .rqap');if(!el)return;
-    const p=areaPicker(el);el.classList.add('row');p.setHier(RQ.hier||[]);
+    const p=areaPicker(el);el.classList.add('row');p.setHier(RQ.hier||[]);p.setMode(apMode(r.jabatan_diminta));
     p.set(r.area_sel||{k:[],b:guessBam(r.area_diminta,bams),c:[]});RQP.set(r.id,p);
   });
   $('#rsL').innerHTML=RQ.resets.map(r=>`<div class="rqc" data-id="${r.id}">
@@ -1404,6 +1413,7 @@ function rqDraw(){
       <div class="rqa"><span class="rqx" style="margin-left:0"><button class="b p" data-a="reset" type="button">Buat password sementara</button><button class="b s" data-a="dismiss" type="button">Abaikan</button></span></div>
     </div>`).join('')||'<div class="rqe">Tidak ada permintaan reset yang menunggu.</div>';
 }
+$('#rgL').onchange=e=>{const sl=e.target.closest('select.rqj');if(!sl)return;const p=RQP.get(+sl.closest('.rqc').dataset.id);if(p)p.setMode(apMode(sl.value))};
 $('#rgL').onclick=async e=>{
   const b=e.target.closest('button[data-a]');if(!b)return;
   const c=b.closest('.rqc'),id=+c.dataset.id;

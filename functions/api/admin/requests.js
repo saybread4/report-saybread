@@ -8,7 +8,7 @@ import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
 import { requireUser, audit, JABATAN, LABEL, normScope, isUtama, isFullRole } from '../../_lib/auth.js';
 import { hashPassword, tempPassword, iterFrom } from '../../_lib/security.js';
-import { loadHierarchySafe, hasSelection, resolveArea, packArea } from '../../_lib/area.js';
+import { loadHierarchySafe, areaForJabatan, hasSelection, resolveArea, packArea } from '../../_lib/area.js';
 
 async function bamList(db) {
   const r = await db.query("SELECT DISTINCT UPPER(TRIM(bam)) AS bam FROM toko WHERE bam IS NOT NULL AND TRIM(bam) <> '' ORDER BY 1");
@@ -72,7 +72,7 @@ export async function handlePost({ request, env }, db) {
     if (b.jabatan === 'ADMIN_PUSAT' && !isUtama(me)) throw new HttpError(403, 'Tidak diizinkan.', 'FORBIDDEN');
     let scope = null;
     if (!isFullRole(b.jabatan)) {
-      if (hasSelection(b.area)) scope = packArea(await resolveArea(db, b.area));   // pilihan KOORBAM / BAM / CABANG
+      if (hasSelection(b.area)) scope = packArea(await resolveArea(db, areaForJabatan(b.jabatan, b.area)));   // pilihan KOORBAM / BAM / CABANG
       else {
         scope = normScope(b.bam_scope);
         if (!scope.length) throw new HttpError(400, 'Tentukan minimal satu BAM untuk area jabatan ini.', 'NO_SCOPE');

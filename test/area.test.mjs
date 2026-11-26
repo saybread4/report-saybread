@@ -137,3 +137,25 @@ test('daftar dengan pilihan dropdown -> tersimpan sebagai JSON, admin melihat ri
   assert.equal(ok.status, 200);
   assert.deepEqual(JSON.parse(db.st.users.get('5001').bam_scope).cabang, ['A1']);
 });
+
+test('jabatan KOORBAM / BAM: hanya pilihan KOORBAM / BAM yang dipakai, sisanya otomatis semua (server)', async () => {
+  const { db, post } = await admin();
+  // KOORBAM: BAM & CABANG yang terkirim diabaikan -> semua BAM di bawah K1, tanpa pembatas cabang
+  await post({ action: 'create', nik: 'KB1', nama: 'Koor', jabatan: 'KOORBAM', area: { koorbam: ['K1'], bam: ['BAM A'], cabang: ['A1'] }, password: 'Rahasia2026' });
+  let s = JSON.parse(db.st.users.get('KB1').bam_scope);
+  assert.deepEqual([s.bam, s.cabang], [['BAM A', 'BAM B'], []]);
+  // BAM: KOORBAM & CABANG diabaikan -> semua cabang pada BAM itu
+  await post({ action: 'create', nik: 'BM1', nama: 'Bam', jabatan: 'BAM', area: { koorbam: ['K2'], bam: ['BAM A'], cabang: ['A1'] }, password: 'Rahasia2026' });
+  s = JSON.parse(db.st.users.get('BM1').bam_scope);
+  assert.deepEqual([s.bam, s.cabang], [['BAM A'], []]);
+  // KOORBAM tanpa memilih KOORBAM -> ditolak
+  assert.equal((await post({ action: 'create', nik: 'KB2', nama: 'Koor', jabatan: 'KOORBAM', area: { bam: ['BAM A'] } })).status, 400);
+  // BAS tetap memakai ketiganya
+  await post({ action: 'create', nik: 'BS1', nama: 'Bas', jabatan: 'BAS', area: { bam: ['BAM A'], cabang: ['A1'] }, password: 'Rahasia2026' });
+  assert.deepEqual(JSON.parse(db.st.users.get('BS1').bam_scope).cabang, ['A1']);
+});
+
+test('label jabatan memakai KOORBAM huruf kapital', async () => {
+  const { LABEL } = await import('../functions/_lib/auth.js');
+  assert.deepEqual([LABEL.KOORBAM, LABEL.ADMIN_KOORBAM], ['KOORBAM', 'Admin KOORBAM']);
+});

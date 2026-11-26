@@ -13,8 +13,8 @@ export const JABATAN = ['ADMIN_PUSAT', 'ADMINISTRATOR', 'ADMIN_KOORBAM', 'KOORBA
 export const LABEL = {
   ADMIN_PUSAT: 'Admin Utama',
   ADMINISTRATOR: 'Administrator',
-  ADMIN_KOORBAM: 'Admin Koorbam',
-  KOORBAM: 'Koorbam',
+  ADMIN_KOORBAM: 'Admin KOORBAM',
+  KOORBAM: 'KOORBAM',
   BAM: 'BAM',
   BAS: 'BAS',
   BASTR: 'BASTR',

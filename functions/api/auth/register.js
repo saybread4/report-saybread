@@ -4,7 +4,7 @@ import { getDb } from '../../_lib/db.js';
 import { json, errorResponse, readJson, checkOrigin, HttpError } from '../../_lib/http.js';
 import { audit, normNik } from '../../_lib/auth.js';
 import { hashPassword, checkPasswordPolicy, iterFrom } from '../../_lib/security.js';
-import { resolveArea } from '../../_lib/area.js';
+import { resolveArea, areaForJabatan } from '../../_lib/area.js';
 
 // Jabatan yang boleh dipilih saat mendaftar. Jabatan Admin hanya bisa diberikan oleh Admin Pusat.
 export const REG_JABATAN = ['KOORBAM', 'BAM', 'BAS', 'BASTR'];
@@ -36,7 +36,7 @@ export async function handle({ request, env }, db) {
   if (!REG_JABATAN.includes(b.jabatan)) throw new HttpError(400, 'Pilih jabatan Anda.');
   let area;
   if (b.area && typeof b.area === 'object') {            // pilihan dropdown KOORBAM / BAM / CABANG
-    const r = await resolveArea(db, b.area);              // diperiksa ke data toko; isi palsu ditolak
+    const r = await resolveArea(db, areaForJabatan(b.jabatan, b.area));              // diperiksa ke data toko; isi palsu ditolak
     area = JSON.stringify({ k: r.sel.k, b: r.sel.b, c: r.sel.c });
     const lim = await areaLimit(db);
     if (area.length > lim) throw new HttpError(400, 'Pilihan area terlalu banyak. Kurangi pilihan CABANG (atau pilih BAM-nya saja).');
