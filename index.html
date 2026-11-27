@@ -1245,7 +1245,7 @@ function setPending(p){
 async function refreshPending(){try{const j=await api('/api/auth/me');setPending(j.pending)}catch(e){}}
 
 /* ================= PEMILIH AREA: KOORBAM / BAM / CABANG =================
-   Tiga dropdown multi-pilih yang saling terhubung: daftar pilihan tiap dropdown mengikuti pilihan dua dropdown lainnya,
+   Tiga dropdown multi-pilih yang saling terhubung dari atas ke bawah: daftar BAM mengikuti KOORBAM, daftar CABANG mengikuti KOORBAM dan BAM,
    dan pilihan yang tidak cocok lagi dibuang otomatis. Data = [[koorbam, bam, cabang], ...] dari tabel toko (server).
    Dipakai di form Daftar, Kelola Pengguna (tambah & ubah area), dan persetujuan pendaftaran. Server menghitung ulang area dari pilihan ini. */
 const apU=v=>String(v==null?'':v).trim().toUpperCase();
@@ -1254,8 +1254,11 @@ function areaPicker(root,o){
   const KEYS=[['k','KOORBAM',0],['b','BAM',1],['c','CABANG',2]];
   let H=[];const S={k:new Map(),b:new Map(),c:new Map()},OPT={k:new Map(),b:new Map(),c:new Map()};
   const rowsFor=skip=>H.filter(r=>KEYS.every(([k,,i])=>k===skip||!S[k].size||S[k].has(apU(r[i]))));
-  const cascade=()=>{for(let pass=0;pass<2;pass++)for(const [k,,i] of KEYS){
-    const m=new Map();for(const r of rowsFor(k)){const v=String(r[i]||'').trim();if(v&&!m.has(apU(v)))m.set(apU(v),v)}
+  // Berjenjang dari atas: KOORBAM selalu menampilkan semua pilihan, BAM mengikuti KOORBAM, CABANG mengikuti KOORBAM dan BAM.
+  // (Pilihan di tingkat bawah tidak menyempitkan tingkat atas, sehingga KOORBAM / BAM tetap bisa dipilih lebih dari satu.)
+  const rowsAbove=i=>H.filter(r=>KEYS.every(([k,,j])=>j>=i||!S[k].size||S[k].has(apU(r[j]))));
+  const cascade=()=>{for(const [k,,i] of KEYS){
+    const m=new Map();for(const r of rowsAbove(i)){const v=String(r[i]||'').trim();if(v&&!m.has(apU(v)))m.set(apU(v),v)}
     OPT[k]=m;for(const u of [...S[k].keys()])if(!m.has(u))S[k].delete(u)}};
   const any=()=>KEYS.some(([k])=>S[k].size>0);
   let VIS=new Set(['k','b','c']);   // dropdown yang tampil; yang disembunyikan tidak dipakai (otomatis semua di bawah pilihan yang tampil)
