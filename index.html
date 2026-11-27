@@ -680,7 +680,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
           <div class="gf"><label for="rgNama">Nama lengkap</label><input id="rgNama" autocomplete="name"></div>
           <div class="gf"><label for="rgJab">Jabatan</label><select id="rgJab"><option value="">Pilih jabatan…</option><option value="KOORBAM">KOORBAM</option><option value="BAM">BAM</option><option value="BAS">BAS</option><option value="BASTR">BASTR</option></select></div>
           <div class="ap gate" id="rgAp"></div>
-          <div class="ghint" id="rgApHint">Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.</div>
+          <div class="ghint" id="rgApHint">Pilih satu KOORBAM dan satu BAM; CABANG boleh lebih dari satu. KOORBAM / CABANG boleh dikosongkan.</div>
           <div class="gf"><label for="rgKontak">No. WhatsApp <span class="gopt">(opsional)</span></label><input id="rgKontak" inputmode="tel" autocomplete="tel" placeholder="Agar admin bisa menghubungi Anda"></div>
           <div class="gf pw"><label for="rgPw">Password</label><input id="rgPw" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="rgPw" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
           <div class="gf pw"><label for="rgPw2">Ulangi password</label><input id="rgPw2" type="password" autocomplete="new-password"><button type="button" class="geye" data-for="rgPw2" aria-label="Tampilkan password"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg></button></div>
@@ -978,7 +978,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
  <div style="background:#fff;color:#1f2937;border-radius:16px;width:640px;max-width:100%;max-height:88vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.35)">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #e3e6ea"><b style="font-size:13px" id="arT">Area</b><button class="b s" id="arX" type="button"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <div style="padding:12px"><div id="arAp"></div>
-   <div class="amn" style="padding:8px 0 0">Pilihan saling terhubung. Dikosongkan di tingkat bawah = semua di tingkat atasnya. Perubahan berlaku saat pengguna masuk lagi.</div>
+   <div class="amn" style="padding:8px 0 0">KOORBAM dan BAM satu pilihan, CABANG boleh lebih dari satu. Dikosongkan di tingkat bawah = semua di tingkat atasnya. Perubahan berlaku saat pengguna masuk lagi.</div>
    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px"><button class="b s" id="arNo" type="button">Batal</button><button class="b p" id="arOk" type="button">Simpan area</button></div></div>
  </div></div>
 <div id="usW" style="display:none;position:fixed;inset:0;z-index:250;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:12px">
@@ -999,7 +999,7 @@ td.qc{background:var(--hl)!important;font-weight:700;color:#5b3a00}
     <button class="b p" id="usAdd" type="button">+ Tambah</button>
    </div>
    <div id="usApW" style="padding:8px 12px 0"><div id="usAp"></div></div>
-   <div id="usHint" class="amn" style="padding-top:2px">Area: pilih KOORBAM / BAM / CABANG (boleh lebih dari satu, saling terhubung). Dikosongkan di tingkat bawah = semua di tingkat atasnya. Admin Utama dan Administrator melihat semuanya.</div>
+   <div id="usHint" class="amn" style="padding-top:2px">Area: pilih satu KOORBAM dan/atau satu BAM; CABANG boleh lebih dari satu (saling terhubung). Dikosongkan di tingkat bawah = semua di tingkat atasnya. Admin Utama dan Administrator melihat semuanya.</div>
    <div style="overflow:auto;padding:0 12px 12px"><table><thead><tr><th>NIK</th><th>Nama</th><th>Jabatan</th><th>Area</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="usL"><tr><td colspan="6">Memuat…</td></tr></tbody></table></div>
   </div>
   <div id="usPaneR" style="display:none;flex-direction:column;min-height:0">
@@ -1252,6 +1252,7 @@ const apU=v=>String(v==null?'':v).trim().toUpperCase();
 document.addEventListener('click',e=>document.querySelectorAll('.ap .apf.open').forEach(f=>{if(!f.contains(e.target))f.classList.remove('open')}));
 function areaPicker(root,o){
   const KEYS=[['k','KOORBAM',0],['b','BAM',1],['c','CABANG',2]];
+  const ONE=new Set(['k','b']);   // KOORBAM dan BAM: satu pilihan saja; CABANG boleh lebih dari satu
   let H=[];const S={k:new Map(),b:new Map(),c:new Map()},OPT={k:new Map(),b:new Map(),c:new Map()};
   const rowsFor=skip=>H.filter(r=>KEYS.every(([k,,i])=>k===skip||!S[k].size||S[k].has(apU(r[i]))));
   // Berjenjang dari atas: KOORBAM selalu menampilkan semua pilihan, BAM mengikuti KOORBAM, CABANG mengikuti KOORBAM dan BAM.
@@ -1266,7 +1267,7 @@ function areaPicker(root,o){
   const render=k=>{
     const f=fld(k),q=f.querySelector('.dd-search').value.trim().toLowerCase();
     const v=[...OPT[k].entries()].filter(([u,l])=>!q||l.toLowerCase().includes(q)).sort((a,b)=>CO(a[1],b[1]));f._v=v;
-    f.querySelector('.dd-list').innerHTML=v.slice(0,300).map(([u,l],i)=>`<label class="opt"><input type="checkbox" data-i="${i}"${S[k].has(u)?' checked':''}><span>${esc(l)}</span></label>`).join('')
+    f.querySelector('.dd-list').innerHTML=v.slice(0,300).map(([u,l],i)=>`<label class="opt"><input type="${ONE.has(k)?'radio':'checkbox'}" data-i="${i}"${S[k].has(u)?' checked':''}><span>${esc(l)}</span></label>`).join('')
       +(v.length>300?`<div class="note">+${v.length-300} lainnya — ketik untuk mencari</div>`:'')+(v.length?'':'<div class="note">Tidak ada pilihan</div>');
   };
   const refresh=()=>{
@@ -1278,7 +1279,7 @@ function areaPicker(root,o){
     const rs=rowsFor(null);el.textContent='Mencakup '+new Set(rs.map(r=>apU(r[1]))).size+' BAM · '+new Set(rs.map(r=>apU(r[1])+'\u0001'+apU(r[2]))).size+' cabang';
   };
   root.classList.add('ap');
-  root.innerHTML=KEYS.map(([k,l])=>`<div class="apf" data-k="${k}"><label>${l}</label><button type="button" class="dd-btn"><span>Pilih…</span><i>▾</i></button><div class="ap-panel"><input class="dd-search" placeholder="Cari…" autocomplete="off"><div class="dd-act"><a data-a="all">Pilih semua hasil</a><a data-a="none">Kosongkan</a></div><div class="dd-list"></div></div></div>`).join('')+'<div class="ap-sum"></div>';
+  root.innerHTML=KEYS.map(([k,l])=>`<div class="apf" data-k="${k}"><label>${l}</label><button type="button" class="dd-btn"><span>Pilih…</span><i>▾</i></button><div class="ap-panel"><input class="dd-search" placeholder="Cari…" autocomplete="off"><div class="dd-act">${ONE.has(k)?'<span></span>':'<a data-a="all">Pilih semua hasil</a>'}<a data-a="none">Kosongkan</a></div><div class="dd-list"></div></div></div>`).join('')+'<div class="ap-sum"></div>';
   root.addEventListener('click',e=>{
     const f=e.target.closest('.apf');if(!f)return;const k=f.dataset.k;
     if(e.target.closest('.dd-btn')){const open=f.classList.contains('open');root.querySelectorAll('.apf.open').forEach(x=>x.classList.remove('open'));if(!open){f.classList.add('open');f.querySelector('.dd-search').value='';render(k);f.querySelector('.dd-search').focus()}return}
@@ -1287,9 +1288,11 @@ function areaPicker(root,o){
   });
   let sT;root.addEventListener('input',e=>{if(!e.target.classList.contains('dd-search'))return;const k=e.target.closest('.apf').dataset.k;clearTimeout(sT);sT=setTimeout(()=>render(k),90)});
   root.addEventListener('change',e=>{
-    const f=e.target.closest('.apf');if(!f||e.target.type!=='checkbox')return;
+    const f=e.target.closest('.apf');if(!f||!/^(checkbox|radio)$/.test(e.target.type))return;
     const k=f.dataset.k,it=(f._v||[])[+e.target.dataset.i];if(!it)return;
-    e.target.checked?S[k].set(it[0],it[1]):S[k].delete(it[0]);cascade();refresh();
+    if(ONE.has(k)){S[k].clear();S[k].set(it[0],it[1]);f.classList.remove('open')}   // pilihan tunggal: mengganti pilihan sebelumnya, panel menutup
+    else e.target.checked?S[k].set(it[0],it[1]):S[k].delete(it[0]);
+    cascade();refresh();
   });
   return{
     setHier(h){H=(h||[]).map(r=>[r[0]||'',r[1]||'',r[2]||'']);cascade();refresh()},
@@ -1307,7 +1310,7 @@ function areaPicker(root,o){
   };
 }
 const apMode=j=>j==='KOORBAM'?'k':j==='BAM'?'b':'all';   // jabatan KOORBAM memilih KOORBAM saja, BAM memilih BAM saja
-const apHint=m=>m==='k'?'Pilih satu atau lebih KOORBAM. BAM dan cabang di bawahnya otomatis ikut.':m==='b'?'Pilih satu atau lebih BAM. KOORBAM dan cabangnya otomatis ikut.':'Pilih area Anda: boleh lebih dari satu, dan pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.';
+const apHint=m=>m==='k'?'Pilih satu KOORBAM. BAM dan cabang di bawahnya otomatis ikut.':m==='b'?'Pilih satu BAM. KOORBAM dan cabangnya otomatis ikut.':'Pilih satu KOORBAM dan satu BAM; CABANG boleh lebih dari satu. Pilihan saling terhubung. KOORBAM / CABANG boleh dikosongkan.';
 let APH=null;   // daftar [koorbam, bam, cabang] untuk form Daftar (tanpa login)
 async function apLoad(){if(APH)return APH;const j=await api('/api/auth/area-options');APH=(j&&j.h)||[];return APH}
 
