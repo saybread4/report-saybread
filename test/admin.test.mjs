@@ -291,6 +291,15 @@ test('override rank: hanya kunci BAS| dan hanya Admin Pusat', async () => {
   assert.equal(can(koor, handlers.saverankovr.need), false);
 });
 
+test('override rank: Rank BASTR memakai kunci BASTR| (hanya Admin Pusat), kunci lain tetap ditolak', async () => {
+  const db = mk((s) => (s.startsWith('SELECT') ? [{ key: 'BASTR|Budi|2026-11|spd', val: 250000 }] : []));
+  assert.deepEqual(await run('saverankovr', pusat, ['t', 'BASTR|Budi|2026-11|spd', 250000], db), { 'BASTR|Budi|2026-11|spd': 250000 });
+  assert.match(db.execs()[0].sql, /INSERT INTO rank_override/);
+  assert.deepEqual(db.execs()[0].a.slice(0, 2), ['BASTR|Budi|2026-11|spd', 250000]);
+  await rejects(run('saverankovr', pusat, ['t', 'BASTRX|a', 1], mk()), 400, /Kunci tidak valid/);   // harus tepat BAS| atau BASTR|
+  await rejects(run('saverankovr', pusat, ['t', 'AM|a', 1], mk()), 400, /Kunci tidak valid/);
+});
+
 test('data_updates: dicatat setelah impor/ubah/hapus berhasil; gagal mencatat tidak menggagalkan operasi', async () => {
   const db = mk(N(1));
   await run('adminimport', pusat, ['t', 'item', [{ plu: '1' }], ['plu'], false], db);

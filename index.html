@@ -2179,7 +2179,7 @@ function kontChart(m){
   const rows=list.map(o=>`<div class="kr"><div class="kl" title="${esc(o.name)}">${esc(o.name)}</div><div class="kb">${P?`<i class="b1" style="width:${w(o.kp)}%"></i>`:''}<i class="b2" style="width:${w(o.kt)}%"></i></div><div class="kv"><b>${pz(o.kt)}</b>${P?`<small>${pz(o.kp)}</small>`:''}</div></div>`).join('');
   const leg=`<div class="leg">${P?`<span style="--c:#94a3b8">${esc(P.label)}</span>`:''}<span style="--c:#0f766e">${esc(C.label)}</span></div>`;
   return`<div class="card chart"><div class="ch-h"><b>% Kontribusi per Deskripsi</b><small style="color:var(--mu)">dari SALES_QTY</small></div>${leg}<div style="margin-top:4px">${rows}</div>`
-    +(all.length>list.length?`<div class="kn">Menampilkan 20 teratas dari ${all.length} item.</div>`:'')+`</div>`;
+    +`</div>`;
 }
 
 function renderM(){
@@ -2914,8 +2914,8 @@ function renderC(tg){
     +(SHOWOG?'<th rowspan="2" class="og ogs">BAS</th><th rowspan="2" class="og">BASTR</th>':'')
     +`</tr><tr class="g2">${x.cmp?th('gp'):''}${th('gc')}</tr></thead>`;
   const sl=(CSORTS.find(q=>q[0]===CSORT)[1]).replace('Urut: ','');
-  const note=`<div class="kn">${CTOP==='all'?'Semua toko':'Top '+CTOP+' dari '+all+' toko'}, urut ${sl}. TOTAL mencakup semua ${all} toko.`+(hid>0?` ${hid} toko tanpa sales bulan berjalan tidak ditampilkan.`:'')
-    +(x.noPrev?' Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.':x.cmp?` Growth SPD dan varian BAP: <b>${esc(x.cL)}</b> vs <b>${esc(x.pL)}</b>.`:'')+(DSEL.size?' Filter deskripsi aktif: <b>'+DSEL.size+'</b> item.':'')+'</div>';
+  const nt=[];if(hid>0)nt.push(`${hid} toko tanpa sales bulan berjalan tidak ditampilkan.`);if(x.noPrev)nt.push('Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.');
+  const note=nt.length?`<div class="kn">${nt.join(' ')}</div>`:'';
   $('#cOut').innerHTML=`<div class="tw"><table class="bt">${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`+note;
   CCUR={sub:'Toko',x,L,tc:R.tc,tp:R.tp,tg:R.tg,tv:R.tv,name:tg.name};
   setDl();
@@ -2968,8 +2968,7 @@ function renderG(sub){
     +(x.cmp?'<th rowspan="2" class="ga bs">GROWTH<br>SPD</th><th rowspan="2" class="ga">VARIAN %<br>BAP</th>':'')
     +`</tr><tr class="g2">${x.cmp?th('gp'):''}${th('gc')}</tr></thead>`;
   const sl=(CSORTS.find(q=>q[0]===CSORT)[1]).replace('Urut: ','');
-  const note=`<div class="kn">Semua ${all} ${sub.toLowerCase()}, urut ${sl}. TOTAL mencakup ${nf(R.tc.tk)} toko.</div>`
-    +(x.noPrev?' Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.':x.cmp?` Growth SPD dan varian BAP: <b>${esc(x.cL)}</b> vs <b>${esc(x.pL)}</b>.`:'');
+  const note=x.noPrev?'<div class="kn">Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.</div>':'';
   $('#cOut').innerHTML=`<div class="tw"><table class="bt">${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`+note;
   CCUR={sub,x,L,tc:R.tc,tp:R.tp,tg:R.tg,tv:R.tv,name:(target()||{}).name||''};
   setDl();
@@ -3356,8 +3355,7 @@ function renderBT(){
     +(x.cmp?`<th colspan="${hd.length}" class="gp">${esc(x.pL)}</th>`:'')+`<th colspan="${hd.length}" class="gc">${esc(x.cL)}</th>`
     +(x.cmp?'<th rowspan="2" class="ga bs">GROWTH<br>SPD</th><th rowspan="2" class="ga">VARIAN %<br>BAP</th>':'')
     +`</tr><tr class="g2">${x.cmp?th('gp'):''}${th('gc')}</tr></thead>`;
-  const note=x.noPrev?'<div class="kn">Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.</div>'
-    :x.cmp?`<div class="kn">Growth SPD dan varian BAP membandingkan <b>${esc(x.cL)}</b> dengan <b>${esc(x.pL)}</b>${BCMP==='closing'?' (closing bulan lalu)':' (tanggal yang sama)'}. Baris <b style="background:#dcfce7;padding:0 4px">hijau</b> = bulan lalu tidak ada sales, <b style="background:#fee2e2;padding:0 4px">merah</b> = bulan berjalan tidak ada sales (growth dihitung 0,0%).</div>`:'';
+  const note=x.noPrev?'<div class="kn">Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.</div>':'';
   $('#bOut').innerHTML=`<div class="tw"><table class="bt">${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`+note;
   BCUR={sub:'Toko',x,L,tc,tp,tg,tv,bx};
 }
@@ -3458,9 +3456,7 @@ function renderBP(){
   const head=`<thead><tr class="g1"><th rowspan="2" class="s1">NO</th><th rowspan="2" class="s2">KODE</th><th rowspan="2" class="s3">NAMA TOKO</th>`
     +`<th colspan="${N}" class="ga">BA QTY · ${esc(lab)}</th><th rowspan="2" class="ga bs">TOTAL<br>QTY</th><th rowspan="2" class="ga">TOTAL<br>BA %</th></tr>`
     +`<tr class="g2">${wk.map((w,j)=>`<th class="gc dh${w?' wkh':''}">${j+1}</th>`).join('')}</tr></thead>`;
-  const shown=BTOP==='all'?'semua toko':'Top '+BTOP+' dari '+T.n+' toko';
-  $('#bOut').innerHTML=`<div class="tw"><table class="bt bp">${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`
-    +`<div class="kn">${shown}, urut ${BSRT.BAP==='qty'?'BA QTY terbanyak':'%BAP tertinggi'}. TOTAL BA % = BA_RP / SALES_RP. Warna sel makin merah = BA QTY makin besar. Header merah = Jumat, Sabtu, Minggu.</div>`;
+  $('#bOut').innerHTML=`<div class="tw"><table class="bt bp">${head}<tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`;
   BCUR={sub:'BAP',L,T,N,lab,wk,mx};
 }
 function bModelP(R,nm){
@@ -3621,12 +3617,12 @@ function rctx(){
   const blab=(k,n)=>(n<dim(k)?'1-'+n+' ':'')+MONF[+k.slice(5)]+' '+k.slice(0,4);
   return{key,last,pk,np,cL:blab(key,last),pL:pk?blab(pk,np):'',cmp:!!pk,noPrev:RCMP!=='off'&&!pk};
 }
-/* edit administrator (khusus tabel BAS): kunci 'BAS|nama|yyyy-MM|field', field = tk | rp | qpd | spd | ba */
+/* edit Admin Utama (tabel Rank BAS dan Rank BASTR): kunci 'BAS|nama|yyyy-MM|field' atau 'BASTR|nama|yyyy-MM|field', field = tk | rp | qpd | spd | ba */
 const FLD=['tk','rp','qpd','spd','ba'];
-const ovrKey=(n,m,f)=>'BAS|'+n+'|'+m+'|'+f;
+const ovrKey=(n,m,f,g)=>(g==='bastr'?'BASTR':'BAS')+'|'+n+'|'+m+'|'+f;   // grup BAS -> 'BAS|...', grup BASTR -> 'BASTR|...'
 function rApply(s,n,m,grp){
-  if(grp!=='bas'||!s||!RD.ovr)return s;
-  const v={};FLD.forEach(f=>{const q=RD.ovr[ovrKey(n,m,f)];if(q!==undefined)v[f]=q});
+  if((grp!=='bas'&&grp!=='bastr')||!s||!RD.ovr)return s;
+  const v={};FLD.forEach(f=>{const q=RD.ovr[ovrKey(n,m,f,grp)];if(q!==undefined)v[f]=q});
   if(!Object.keys(v).length)return s;
   const o=Object.assign({},s);o.ov=v;
   if(v.rp!==undefined)o.rp=v.rp;else if(v.spd!==undefined&&s.nq)o.rp=v.spd*s.nq;
@@ -3676,7 +3672,7 @@ function renderR(){
   fillBlnR();
   const R=rankCalc(RGRP),x=R.x,L=R.L,tc=R.tc,tp=R.tp,tg=R.tg,tv=R.tv;
   if(!L.length){$('#rOut').innerHTML='<div class="card empty" style="margin-top:8px"><div class="e"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg></div><div>Tidak ada penjualan pada periode ini.</div></div>';return}
-  const EDIT=RGRP==='bas'&&canRankEdit();
+  const EDIT=(RGRP==='bas'||RGRP==='bastr')&&canRankEdit();
   const bc=s=>s?[z(s.tk,fi),z(s.rp,fi),z(s.qpd,fi),z(s.spd,fi),pz(s.ba)]:['','','','',''];
   const cells=(s,hs,ed)=>bc(s).map((t,j)=>{
     let cls=j===0&&hs?'hs':'',at='';
@@ -3691,8 +3687,7 @@ function renderR(){
     +(x.cmp?`<th colspan="5" class="gp">${esc(x.pL)}</th>`:'')+`<th colspan="5" class="gc">${esc(x.cL)}</th>`
     +(x.cmp?'<th rowspan="2" class="ga bs">GROWTH<br>SPD</th><th rowspan="2" class="ga">VARIAN %<br>BAP</th>':'')
     +`</tr><tr class="g2">${x.cmp?th('gp'):''}${th('gc')}</tr></thead>`;
-  const note=(x.noPrev?'<div class="kn">Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.</div>':'')
-    +(EDIT?'<div class="kn"></div>':'');
+  const note=(x.noPrev?'<div class="kn">Data bulan sebelumnya belum ada, jadi pembanding tidak ditampilkan.</div>':'');
   $('#rOut').innerHTML=`<div class="tw"><table class="bt">${head}<tbody>${body}</tbody>${L.length>1?`<tfoot>${foot}</tfoot>`:''}</table></div>`+note;
   RCUR=R;
   $('#dlR button').disabled=false;
@@ -3700,7 +3695,7 @@ function renderR(){
 const gsr=(fn,...a)=>new Promise((ok,no)=>google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn](...a));
 $('#rOut').addEventListener('click',e=>{
   const td=e.target.closest('td.ed');if(!td||td.querySelector('input')||!canRankEdit())return;
-  const f=td.dataset.f,k=ovrKey(td.dataset.n,td.dataset.m,f),O=RD.ovr||{},pct=f==='ba',cur=O[k];
+  const f=td.dataset.f,k=ovrKey(td.dataset.n,td.dataset.m,f,RGRP),O=RD.ovr||{},pct=f==='ba',cur=O[k];
   const old=td.innerHTML;
   td.innerHTML='<input style="width:92px;font:inherit;text-align:center" value="'+(cur===undefined?'':String(pct?cur*100:cur).replace('.',','))+'" placeholder="kosong = asli">';
   const inp=td.firstChild;inp.focus();inp.select();let done=0;
@@ -4170,7 +4165,7 @@ let SCOPE=null,TOKEN='',GB=null,GSEL=new Set();
 let VIEWER='',MPW='';   // VIEWER = nama Administrator Lihat (hanya-lihat, semua cabang, tanpa hak ubah); MPW = password admin utama (hanya di memori, untuk halaman Kelola Admin)
 let ADMBAM=null;   // null = administrator utama; array nama BAM = administrator BAM (hanya kelola data BAM itu)
 const isFull=()=>!!TOKEN&&!ADMBAM;
-const canRankEdit=()=>isFull()&&!!(ME&&ME.can&&ME.can.rank);   // ubah angka Rank BAS: khusus Admin Utama   // GSEL: cabang yang ditandai di gerbang; kosong = Semua Cabang
+const canRankEdit=()=>isFull()&&!!(ME&&ME.can&&ME.can.rank);   // ubah angka Rank BAS dan Rank BASTR: khusus Admin Utama   // GSEL: cabang yang ditandai di gerbang; kosong = Semua Cabang
 function gateOpen(){
   gView('main');gAdmToggle(false);
   $('#gX').style.display=SCOPE?'':'none';gAdmUI();
@@ -4509,7 +4504,7 @@ function bgHtml(M){
     +`<tr><th rowspan="2">TGL</th>${hs(3,pN,'pv')}${hs(2,'TARGET '+cN,'tgt')}${hs(3,cN,'cr')}<th rowspan="2">GROWTH</th><th rowspan="2">VARIAN<br>BA%</th><th rowspan="2">% ACH</th></tr>`
     +`<tr>${hh('HARI','pv')}${hh('SALES RP','pv')}${hh('BA %','pv')}${hh('TARGET RP','tgt')}${hh('TARGET BA%','tgt')}${hh('HARI','cr')}${hh('SALES RP','cr')}${hh('BA %','cr')}</tr>`
     +`</thead><tbody>${dayRows}${dayTot}</tbody></table></div>`
-    +`<div class="kn"><span style="color:#b4361f;font-weight:700">●</span> Jumat–Minggu (JSM) &nbsp;·&nbsp; <span style="color:#6d28d9;font-weight:700">★</span> Tanggal Gempar &nbsp;·&nbsp; Growth = sales vs tanggal yang sama bulan lalu. Varian BA% = BA% hari ini &minus; BA% tanggal yang sama bulan lalu (hijau = turun). Target BA% = maksimal ${nf(BGBAP*100,0)}% atau BA% bulan lalu turun 1 poin (bulan ini <b>${nf(M.tBap*100,1)}%</b>). Baris TOTAL: growth dan varian dihitung pada hari yang sudah berjalan, % ACH terhadap target sebulan.</div>`;
+    +`<div class="kn"><span style="color:#b4361f;font-weight:700">●</span> Jumat–Minggu (JSM) &nbsp;·&nbsp; <span style="color:#6d28d9;font-weight:700">★</span> Tanggal Gempar</div>`;
   const wRows=M.weeks.map(o=>`<tr><td class="l">Mgg ${o.n}</td><td class="l">${o.from}–${o.to} ${MON3[+M.key.slice(5)]}</td><td>${o.el}/${o.days}</td><td>${bgR(o.bud)}</td><td>${o.el?bgR(o.act):'-'}</td><td>${o.el?bgChip(o.ach):'-'}</td>${o.el?bgKur(o.bud,o.act):'<td>-</td>'}<td>${o.el?bgChip(o.achT):'-'}</td></tr>`).join('');
   const wT=`<div class="bgw"><table class="bgt"><thead><tr><th class="l">MINGGU</th><th class="l">PERIODE</th><th>HARI</th><th>BUDGED</th><th>PENCAPAIAN</th><th>% ACH</th><th>KURANG</th><th title="Pencapaian dibanding budged hari yang sudah berjalan">% ACH S/D TGL</th></tr></thead><tbody>${wRows}<tr class="tot"><td class="l" colspan="2">TOTAL</td><td>${M.L}/${M.N}</td><td>${bgR(M.B)}</td><td>${bgR(M.A)}</td><td>${bgChip(ach)}</td>${bgKur(M.B,M.A)}<td>${bgChip(achT)}</td></tr></tbody></table></div>`;
   const grp=(arr,title,ed)=>{
@@ -4526,7 +4521,7 @@ function bgHtml(M){
     +kp+bgChart(M)
     +`<div class="bgh">Per Hari</div>`+dayT
     +`<div class="bgh">Per Minggu (Senin–Minggu)</div>`+wT
-    +`<div class="bgh">Per BAS</div>`+grp(M.bas,'BAS')+`<div class="kn">Budged BAS = budged cabang &times; porsi penjualan BAS di cabang itu pada bulan lalu. Urut dari % ACH S/D TGL tertinggi.</div>`
+    +`<div class="bgh">Per BAS</div>`+grp(M.bas,'BAS')
     +(M.cabs.length>=1?`<div class="bgh">Per Cabang</div>`+grp(M.cabs,'CABANG',1):'')
     +bgOvNote(M.key)+bgAnalisa(M)+`</div>`;
 }
@@ -4722,8 +4717,7 @@ function bgtHtml(R){
     +sel('bgtFilt',BGTFILT,[['all','Semua toko'],['lo','Kritis (&lt;65%)'],['bw','Kritis + waspada'],['ok','Aman (&ge;85%)'],['cek','Perlu dicek (baru / tanpa sales)']])
     +`<span class="bgbar">${list.length} toko${list.length>400?' (tampil 400 teratas, sisanya ada di unduhan)':''}</span></div>`;
   return`<div class="bgx">`+kp+ctl+`<div class="bgw dayw"><table class="bgt">${head}<tbody>${body}${tot}</tbody></table></div>`
-    +`<div class="kn">Budged toko = budged cabang &times; porsi penjualan toko bulan lalu. Toko baru: budged SPD maksimal Rp ${bgR(BGTNEW)} per hari, kelebihannya dibagi ke toko lain di cabang itu. SPD = sales per hari ber-sales; SPD budged = budged &divide; ${R.N} hari. `
-    +`Status dari % ACH s/d tgl (realisasi dibanding budged s/d tgl): <b>Aman</b> &ge;85%, <b>Waspada</b> 65–85%, <b>Kritis</b> &lt;65%. <b>Toko baru</b>: belum ada penjualan bulan lalu.${R.nobud.length?' Cabang tanpa budged di sheet BUDGED: '+R.nobud.map(esc).join(', ')+'.':''}${bgOvNote(R.key)}</div></div>`;
+    +(R.nobud.length?`<div class="kn">Cabang tanpa budged di sheet BUDGED: ${R.nobud.map(esc).join(', ')}.</div>`:'')+bgOvNote(R.key)+`</div>`;
 }
 function renderBgt(){
   const S=BGTS;if(!S)return;

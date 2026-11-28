@@ -488,9 +488,9 @@ async function saveBudOvr(db, user, a) {      // [tok, key, nilai] — key 'BUD|
   return overrideMap(db, 'budged_override');
 }
 
-async function saveRankOvr(db, a) {           // [tok, key, nilai] — key 'BAS|...'
+async function saveRankOvr(db, a) {           // [tok, key, nilai] — key 'BAS|...' (Rank BAS) atau 'BASTR|...' (Rank BASTR)
   const key = String(a[1] == null ? '' : a[1]);
-  if (!/^BAS\|/.test(key) || key.length > 180) throw bad('Kunci tidak valid.');
+  if (!/^(BAS|BASTR)\|/.test(key) || key.length > 180) throw bad('Kunci tidak valid.');
   await putOverride(db, 'rank_override', key, ovrValue(a[2]));
   return overrideMap(db, 'rank_override');
 }
